@@ -23,6 +23,12 @@ Deferred items from Plan 1 (Foundation) code reviews. Should be addressed before
 5. **`.env.local` Google credential placeholders** are an undocumented build hack. Document in `.env.example` (a comment line) so the next dev knows why `pnpm build` works but Google sign-in doesn't.
 6. **Missing edge-case provision tests:** case-insensitive lookup test (`Foo@X.co` → must hit existing `foo@x.co` row, not unique-violate); empty email rejection at provision boundary; `ssoSubject` overwrite is intentional → add a comment in `provision.ts`.
 
+### Task 10 — Services queries
+1. **`listServicesForUser` doesn't honor admin-sees-all** (`src/lib/db/queries/services.ts:7`). Authz helpers admit admins regardless of membership, but list query only joins on `team_memberships`. Inconsistent: admin without explicit memberships gets an empty list. Fix: branch on `user.role === 'admin'` and return all services. Add a regression test. Same issue affects `findServiceBySlugForUser`.
+2. **`findServiceBySlugForUser` does list-then-filter** in Node memory. Replace with `select services where slug = ? AND team_id IN (membership subquery)` when traffic justifies. Defer.
+3. **Server Action `createServiceAction` has no `useFormState` wiring.** Zod parse failures + unique-constraint errors propagate to `error.tsx` as 500s instead of inline form errors. Add `useFormState` and return `{ ok: false, errors }` from the action.
+4. **`updateService` is unused so far.** Annotate as "used by Task 12 settings page" or drop until needed.
+
 ### Task 4 — testcontainers scaling
 Per-file testcontainers will hurt by Task 9-12 (5+ integration files). Decide before starting Task 9 between:
 - Cheap: `vitest.config.ts` `fileParallelism: false` (containers boot serially).
