@@ -29,6 +29,14 @@ Deferred items from Plan 1 (Foundation) code reviews. Should be addressed before
 3. **Server Action `createServiceAction` has no `useFormState` wiring.** Zod parse failures + unique-constraint errors propagate to `error.tsx` as 500s instead of inline form errors. Add `useFormState` and return `{ ok: false, errors }` from the action.
 4. **`updateService` is unused so far.** Annotate as "used by Task 12 settings page" or drop until needed.
 
+### Task 11 — Runbooks
+1. **Admin-sees-all leak compounds in editor route.** `findServiceBySlugForUser` 404s admins without team membership, but `requireTeamMember` would let them write. Same root cause as Task 10's services list. Single fix should close both.
+2. **`saveRunbookAction` rethrows raw zod / generic errors.** Same as Task 10's `createServiceAction` — needs structured result type.
+3. **Textarea has no `maxLength`** matching the server-side `max(50_000)` zod limit. Quick UX fix.
+4. **Test gaps:** `getRunbook` outsider denial, `updatedAt` strictly advances on upsert update.
+5. **Three sources of truth for `Severity`** (queries/runbooks.ts, page.tsx, actions.ts zod enum). Consolidate via export from `schema/services.ts`.
+6. **`page.tsx` returns `null` for no session** instead of `redirect('/signin')`. Safer fallback.
+
 ### Task 4 — testcontainers scaling
 Per-file testcontainers will hurt by Task 9-12 (5+ integration files). Decide before starting Task 9 between:
 - Cheap: `vitest.config.ts` `fileParallelism: false` (containers boot serially).
