@@ -37,6 +37,11 @@ Deferred items from Plan 1 (Foundation) code reviews. Should be addressed before
 5. **Three sources of truth for `Severity`** (queries/runbooks.ts, page.tsx, actions.ts zod enum). Consolidate via export from `schema/services.ts`.
 6. **`page.tsx` returns `null` for no session** instead of `redirect('/signin')`. Safer fallback.
 
+### Task 12 — Settings UI
+1. **N+1 user lookup in page render.** `Promise.all(allUserIds.map(findUserById))` issues one query per member. Replace with `inArray(users.id, ids)` single query — same pattern as Tasks 10/11 batching debt.
+2. **No "no teams yet" empty state.** Page renders an empty section when no teams. Add a one-liner.
+3. **Negative tests missing for 3 of 4 admin queries.** Only `createTeamAsAdmin` tests the non-admin rejection path. `addMembershipAsAdmin`, `listTeamsWithMemberships`, `removeMembershipAsAdmin` rely on `requireAdmin` but aren't tested for it. Add 3 negative tests so refactoring doesn't accidentally drop the guard.
+
 ### Task 4 — testcontainers scaling
 Per-file testcontainers will hurt by Task 9-12 (5+ integration files). Decide before starting Task 9 between:
 - Cheap: `vitest.config.ts` `fileParallelism: false` (containers boot serially).
