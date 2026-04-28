@@ -1,11 +1,11 @@
 import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
 import { expect } from 'vitest';
 import * as schema from '@/lib/db/schema';
 
-export type TestDB = PostgresJsDatabase<typeof schema> & { $client: Sql };
+export type TestDB = ReturnType<typeof drizzle<typeof schema>>;
 
 export interface TestDBContext {
   container: StartedPostgreSqlContainer;
