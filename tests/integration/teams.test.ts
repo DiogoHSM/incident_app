@@ -10,6 +10,12 @@ import {
   truncateAll,
   type TestDBContext,
 } from '../setup/db';
+import {
+  createTeamAsAdmin,
+  addMembershipAsAdmin,
+  removeMembershipAsAdmin,
+} from '@/lib/db/queries/teams-admin';
+import { ForbiddenError } from '@/lib/authz';
 
 describe('teams + memberships', () => {
   let ctx: TestDBContext;
@@ -64,5 +70,51 @@ describe('teams + memberships', () => {
 
     const remaining = await ctx.db.select().from(teamMemberships);
     expect(remaining).toHaveLength(0);
+  });
+
+  it('createTeamAsAdmin requires admin role', async () => {
+    const [member] = await ctx.db
+      .insert(users)
+      .values({ email: 'm@x.co', name: 'M', ssoSubject: 's|m' })
+      .returning();
+    expect(member).toBeDefined();
+    await expect(createTeamAsAdmin(ctx.db, member!.id, { name: 'X', slug: 'x' })).rejects.toThrow(
+      ForbiddenError,
+    );
+  });
+
+  it('createTeamAsAdmin creates a team for admin caller', async () => {
+    const [admin] = await ctx.db
+      .insert(users)
+      .values({ email: 'a@x.co', name: 'A', ssoSubject: 's|a', role: 'admin' })
+      .returning();
+    expect(admin).toBeDefined();
+    const team = await createTeamAsAdmin(ctx.db, admin!.id, { name: 'Payments', slug: 'payments' });
+    expect(team.slug).toBe('payments');
+  });
+
+  it('add + remove membership round-trips', async () => {
+    const [admin] = await ctx.db
+      .insert(users)
+      .values({ email: 'a@x.co', name: 'A', ssoSubject: 's|a', role: 'admin' })
+      .returning();
+    expect(admin).toBeDefined();
+    const [u] = await ctx.db
+      .insert(users)
+      .values({ email: 'u@x.co', name: 'U', ssoSubject: 's|u' })
+      .returning();
+    expect(u).toBeDefined();
+    const [team] = await ctx.db.insert(teams).values({ name: 'X', slug: 'x' }).returning();
+    expect(team).toBeDefined();
+    await addMembershipAsAdmin(ctx.db, admin!.id, {
+      teamId: team!.id,
+      userId: u!.id,
+      role: 'member',
+    });
+    const after = await ctx.db.select().from(teamMemberships);
+    expect(after).toHaveLength(1);
+    await removeMembershipAsAdmin(ctx.db, admin!.id, { teamId: team!.id, userId: u!.id });
+    const after2 = await ctx.db.select().from(teamMemberships);
+    expect(after2).toHaveLength(0);
   });
 });
