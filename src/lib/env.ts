@@ -1,16 +1,18 @@
 import { z } from 'zod';
 
+export const adminEmailsSchema = z
+  .string()
+  .default('')
+  .transform((s) =>
+    s
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  );
+
 const schema = z.object({
   DATABASE_URL: z.string().url(),
-  ADMIN_EMAILS: z
-    .string()
-    .default('')
-    .transform((s) =>
-      s
-        .split(',')
-        .map((e) => e.trim().toLowerCase())
-        .filter(Boolean),
-    ),
+  ADMIN_EMAILS: adminEmailsSchema,
   AUTH_SECRET: z.string().min(32),
   AUTH_URL: z.string().url(),
   AUTH_PROVIDER: z.enum(['google']),
