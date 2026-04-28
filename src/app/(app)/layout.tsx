@@ -11,7 +11,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen">
       <Sidebar role={session.user.role} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header user={{ name: session.user.name ?? session.user.email, email: session.user.email }} />
+        <Header
+          user={{ name: session.user.name ?? session.user.email, email: session.user.email }}
+        />
         <main className="flex-1 overflow-auto p-6">{children}</main>
       </div>
     </div>

@@ -17,11 +17,7 @@ export function Sidebar({ role }: Props) {
       <div className="mb-6 text-sm font-semibold">incident_app</div>
       <nav className="flex flex-col gap-1 text-sm">
         {items.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="rounded px-2 py-1.5 hover:bg-white"
-          >
+          <Link key={item.href} href={item.href} className="rounded px-2 py-1.5 hover:bg-white">
             {item.label}
           </Link>
         ))}
