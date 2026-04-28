@@ -1,3 +1,4 @@
+// Edge-safe: imports must stay Edge-runtime compatible. Do not import from @/lib/auth (Node).
 import NextAuth from 'next-auth';
 import { authConfig } from '@/lib/auth/config';
 

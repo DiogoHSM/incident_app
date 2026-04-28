@@ -13,6 +13,26 @@ const eslintConfig = defineConfig([
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    files: ['src/lib/auth/config.ts', 'src/middleware.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@/lib/db', '@/lib/db/*'],
+              message: 'Edge-safe boundary: no DB imports in config.ts or middleware.ts.',
+            },
+            {
+              group: ['node:*', 'pg', 'postgres', 'drizzle-orm', 'drizzle-orm/*'],
+              message: 'Edge-safe boundary: no Node-only imports in config.ts or middleware.ts.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   globalIgnores([
     '.next/**',
     'out/**',
