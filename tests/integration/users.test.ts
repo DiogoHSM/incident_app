@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { users } from '@/lib/db/schema/users';
-import { startTestDb, truncateAll, type TestDBContext } from '../setup/db';
+import {
+  DB_ERR_NOT_NULL,
+  DB_ERR_UNIQUE,
+  expectDbError,
+  startTestDb,
+  truncateAll,
+  type TestDBContext,
+} from '../setup/db';
 
 describe('users schema', () => {
   let ctx: TestDBContext;
@@ -42,8 +49,36 @@ describe('users schema', () => {
     await ctx.db.insert(users).values({ email: 'a@b.co', name: 'A', ssoSubject: 'idp|1' });
     await expect(
       ctx.db.insert(users).values({ email: 'a@b.co', name: 'A2', ssoSubject: 'idp|2' }),
-    ).rejects.toMatchObject({
-      cause: expect.objectContaining({ message: expect.stringMatching(/duplicate|unique/i) }),
-    });
+    ).rejects.toMatchObject(expectDbError(DB_ERR_UNIQUE));
+  });
+
+  it('rejects insert without name (NOT NULL)', async () => {
+    await expect(
+      ctx.db
+        .insert(users)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .values({ email: 'no-name@x.co', ssoSubject: 'idp|0' } as any),
+    ).rejects.toMatchObject(expectDbError(DB_ERR_NOT_NULL));
+  });
+
+  it('rejects invalid role enum value', async () => {
+    await expect(
+      ctx.db
+        .insert(users)
+        .values({
+          email: 'bad-role@x.co',
+          name: 'X',
+          ssoSubject: 'idp|11',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          role: 'superadmin' as any,
+        })
+        .returning(),
+    ).rejects.toMatchObject(
+      expect.objectContaining({
+        cause: expect.objectContaining({
+          message: expect.stringMatching(/invalid input value for enum/i),
+        }),
+      }),
+    );
   });
 });

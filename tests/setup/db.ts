@@ -2,6 +2,7 @@ import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres, { type Sql } from 'postgres';
+import { expect } from 'vitest';
 import * as schema from '@/lib/db/schema';
 
 export type TestDB = PostgresJsDatabase<typeof schema>;
@@ -44,4 +45,14 @@ export async function truncateAll(client: Sql): Promise<void> {
       users
     RESTART IDENTITY CASCADE
   `);
+}
+
+export const DB_ERR_UNIQUE = /duplicate|unique/i;
+export const DB_ERR_FK = /foreign key|violates/i;
+export const DB_ERR_NOT_NULL = /null value|not-null/i;
+
+export function expectDbError(pattern: RegExp): object {
+  return expect.objectContaining({
+    cause: expect.objectContaining({ message: expect.stringMatching(pattern) }),
+  });
 }
