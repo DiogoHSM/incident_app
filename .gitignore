@@ -1,0 +1,5 @@
+.claude/docs/SECRETS.md
+.env
+.env.*
+!.env.example
+.superpowers/
