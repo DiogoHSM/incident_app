@@ -40,6 +40,8 @@ export async function startTestDb(): Promise<TestDBContext> {
 export async function truncateAll(client: Sql): Promise<void> {
   await client.unsafe(`
     TRUNCATE TABLE
+      runbooks,
+      services,
       team_memberships,
       teams,
       users
