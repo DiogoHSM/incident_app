@@ -5,7 +5,7 @@ import postgres, { type Sql } from 'postgres';
 import { expect } from 'vitest';
 import * as schema from '@/lib/db/schema';
 
-export type TestDB = PostgresJsDatabase<typeof schema>;
+export type TestDB = PostgresJsDatabase<typeof schema> & { $client: Sql };
 
 export interface TestDBContext {
   container: StartedPostgreSqlContainer;
