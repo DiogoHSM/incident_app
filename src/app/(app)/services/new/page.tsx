@@ -1,19 +1,13 @@
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
-import { eq } from 'drizzle-orm';
-import { teamMemberships } from '@/lib/db/schema/team-memberships';
-import { teams } from '@/lib/db/schema/teams';
+import { listMyTeams } from '@/lib/db/queries/teams';
 import { createServiceAction } from '../actions';
 
 export default async function NewServicePage() {
   const session = await auth();
   if (!session?.user) return null;
 
-  const myTeams = await db
-    .select({ id: teams.id, name: teams.name, slug: teams.slug })
-    .from(teamMemberships)
-    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
-    .where(eq(teamMemberships.userId, session.user.id));
+  const myTeams = await listMyTeams(db, session.user.id);
 
   if (myTeams.length === 0) {
     return (
