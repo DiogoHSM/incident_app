@@ -8,6 +8,7 @@ import {
   unique,
   index,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { teams } from './teams';
 import { users } from './users';
 import { services, severityEnum } from './services';
@@ -31,9 +32,7 @@ export const incidents = pgTable(
     teamId: uuid('team_id')
       .notNull()
       .references(() => teams.id, { onDelete: 'restrict' }),
-    declaredBy: uuid('declared_by')
-      .notNull()
-      .references(() => users.id, { onDelete: 'restrict' }),
+    declaredBy: uuid('declared_by').references(() => users.id, { onDelete: 'restrict' }),
     severity: severityEnum('severity').notNull(),
     status: incidentStatusEnum('status').notNull().default('triaging'),
     title: text('title').notNull(),
@@ -43,6 +42,10 @@ export const incidents = pgTable(
     icUserId: uuid('ic_user_id').references(() => users.id, { onDelete: 'set null' }),
     scribeUserId: uuid('scribe_user_id').references(() => users.id, { onDelete: 'set null' }),
     commsUserId: uuid('comms_user_id').references(() => users.id, { onDelete: 'set null' }),
+    externalFingerprints: text('external_fingerprints')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -51,6 +54,8 @@ export const incidents = pgTable(
     teamIdx: index('incidents_team_idx').on(t.teamId),
     statusIdx: index('incidents_status_idx').on(t.status),
     declaredAtIdx: index('incidents_declared_at_idx').on(t.declaredAt),
+    externalFingerprintsGin: index('incidents_external_fingerprints_gin')
+      .using('gin', t.externalFingerprints),
   }),
 );
 

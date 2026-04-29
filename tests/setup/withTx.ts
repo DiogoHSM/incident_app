@@ -23,6 +23,8 @@ const TABLES = [
   'action_items',
   'postmortems',
   'incidents',
+  'dead_letter_webhooks',
+  'webhook_sources',
   'runbooks',
   'services',
   'team_memberships',
