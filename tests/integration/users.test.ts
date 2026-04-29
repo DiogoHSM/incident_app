@@ -1,32 +1,20 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { users } from '@/lib/db/schema/users';
 import {
   DB_ERR_NOT_NULL,
   DB_ERR_UNIQUE,
   expectDbError,
-  startTestDb,
-  truncateAll,
-  type TestDBContext,
+  getTestDb,
+  useTestDb,
 } from '../setup/db';
 
 describe('users schema', () => {
-  let ctx: TestDBContext;
-
-  beforeAll(async () => {
-    ctx = await startTestDb();
-  });
-
-  afterAll(async () => {
-    await ctx.cleanup();
-  });
-
-  beforeEach(async () => {
-    await truncateAll(ctx.client);
-  });
+  useTestDb();
 
   it('inserts and reads a user', async () => {
-    const [created] = await ctx.db
+    const db = getTestDb();
+    const [created] = await db
       .insert(users)
       .values({
         email: 'ana@acme.co',
@@ -40,21 +28,23 @@ describe('users schema', () => {
     expect(created!.role).toBe('member');
     expect(created!.createdAt).toBeInstanceOf(Date);
 
-    const [fetched] = await ctx.db.select().from(users).where(eq(users.email, 'ana@acme.co'));
+    const [fetched] = await db.select().from(users).where(eq(users.email, 'ana@acme.co'));
     expect(fetched).toBeDefined();
     expect(fetched!.name).toBe('Ana');
   });
 
   it('rejects duplicate emails', async () => {
-    await ctx.db.insert(users).values({ email: 'a@b.co', name: 'A', ssoSubject: 'idp|1' });
+    const db = getTestDb();
+    await db.insert(users).values({ email: 'a@b.co', name: 'A', ssoSubject: 'idp|1' });
     await expect(
-      ctx.db.insert(users).values({ email: 'a@b.co', name: 'A2', ssoSubject: 'idp|2' }),
+      db.insert(users).values({ email: 'a@b.co', name: 'A2', ssoSubject: 'idp|2' }),
     ).rejects.toMatchObject(expectDbError(DB_ERR_UNIQUE));
   });
 
   it('rejects insert without name (NOT NULL)', async () => {
+    const db = getTestDb();
     await expect(
-      ctx.db
+      db
         .insert(users)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .values({ email: 'no-name@x.co', ssoSubject: 'idp|0' } as any),
@@ -62,8 +52,9 @@ describe('users schema', () => {
   });
 
   it('rejects invalid role enum value', async () => {
+    const db = getTestDb();
     await expect(
-      ctx.db
+      db
         .insert(users)
         .values({
           email: 'bad-role@x.co',
