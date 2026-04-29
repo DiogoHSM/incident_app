@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { type DB } from '@/lib/db/client';
 import { users, type User } from '@/lib/db/schema/users';
 
@@ -11,23 +11,22 @@ export interface ProvisionInput {
 
 export async function provisionUserOnSignIn(db: DB, input: ProvisionInput): Promise<User> {
   const email = input.email.toLowerCase();
-  const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-
-  if (existing) {
-    const [updated] = await db
-      .update(users)
-      .set({ name: input.name, ssoSubject: input.ssoSubject })
-      .where(eq(users.id, existing.id))
-      .returning();
-    if (!updated) throw new Error('Update returned no rows');
-    return updated;
-  }
-
   const role = input.adminEmails.includes(email) ? 'admin' : 'member';
-  const [created] = await db
+
+  const [row] = await db
     .insert(users)
     .values({ email, name: input.name, ssoSubject: input.ssoSubject, role })
+    .onConflictDoUpdate({
+      target: users.email,
+      // Intentionally omit role from SET so re-login never demotes/promotes;
+      // role transitions go through the admin UI.
+      set: {
+        name: sql`excluded.name`,
+        ssoSubject: sql`excluded.sso_subject`,
+      },
+    })
     .returning();
-  if (!created) throw new Error('Insert returned no rows');
-  return created;
+
+  if (!row) throw new Error('Upsert returned no rows');
+  return row;
 }

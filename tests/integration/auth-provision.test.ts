@@ -52,4 +52,42 @@ describe('provisionUserOnSignIn', () => {
     expect(row).toBeDefined();
     expect(row!.role).toBe('member');
   });
+
+  it('two concurrent first-time provisions for the same email return one user', async () => {
+    const db = getTestDb();
+    const input = {
+      email: 'race@x.co',
+      name: 'Race User',
+      ssoSubject: 'sub-race',
+      adminEmails: [],
+    };
+
+    const results = await Promise.all([
+      provisionUserOnSignIn(db, input),
+      provisionUserOnSignIn(db, input),
+    ]);
+
+    expect(results[0]!.id).toBe(results[1]!.id);
+    const all = await db.select().from(users).where(eq(users.email, 'race@x.co'));
+    expect(all).toHaveLength(1);
+  });
+
+  it('case-insensitive lookup hits the existing row', async () => {
+    const db = getTestDb();
+    await provisionUserOnSignIn(db, {
+      email: 'foo@x.co',
+      name: 'Foo',
+      ssoSubject: 'sub-foo',
+      adminEmails: [],
+    });
+    const second = await provisionUserOnSignIn(db, {
+      email: 'FOO@X.CO',
+      name: 'Foo Two',
+      ssoSubject: 'sub-foo-2',
+      adminEmails: [],
+    });
+    const all = await db.select().from(users).where(eq(users.email, 'foo@x.co'));
+    expect(all).toHaveLength(1);
+    expect(second.name).toBe('Foo Two');
+  });
 });
