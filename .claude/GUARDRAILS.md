@@ -2,7 +2,7 @@
 
 > **Always loaded.** "Before touching X, read Y" map — so Claude knows which context to fetch before each edit.
 
-**Last revision**: 2026-04-28 (after Plan 2 merge)
+**Last revision**: 2026-04-29 (after Plan 3 merge)
 
 ---
 
@@ -17,6 +17,7 @@ Before modifying a file that fits one of these categories, **read the correspond
 | DB schema (`src/lib/db/schema/*.ts`), migrations (`drizzle/*`), seeds | spec §4.1 + `foundation_followups.md` | Data changes are forward-only; many decisions (severity tiers, FK cascade vs restrict, citext) are already settled |
 | Query layer (`src/lib/db/queries/*.ts`) | `CLAUDE.md` (boundary rules) + `src/lib/authz/index.ts` | Only place that calls Drizzle directly. Every read query that takes `userId` either calls `requireTeamMember`/`requireAdmin` or branches on `user.role === 'admin'` for admin-sees-all |
 | Incidents schema (`src/lib/db/schema/incidents.ts`), queries (`src/lib/db/queries/incidents.ts`), routes (`src/app/(app)/incidents/**`) | spec §4.1 + §5.1 + §6.3 + `2026-04-28-incidents-core.md` plan | New tables — incidents/incident_services. Slug generator in `src/lib/incidents/slug.ts` is the only place that mints public slugs (3-retry on collision in `declareIncident`). Timeline + status mutations are deferred (Plans 3/4) — don't add them ad-hoc |
+| Timeline schema (`src/lib/db/schema/timeline.ts`), queries (`src/lib/db/queries/timeline.ts`), body schemas (`src/lib/timeline/body.ts`), mutation extensions in `src/lib/db/queries/incidents.ts` (changeIncidentStatus / changeIncidentSeverity / assignIncidentRole) | spec §4.1 + §6.1 + `2026-04-29-timeline-mutations` plan | jsonb `body` MUST go through `TimelineEventBodySchema.parse(...)` before insert. Each mutation writes its `TimelineEvent` in the same `db.transaction(...)` as the row update. New event kinds (`webhook`, `postmortem_link`, `attachment`, `status_update_published`) are added in their owning plans — do not pre-add. State machine + IC-required-when-leaving-triaging is enforced in `changeIncidentStatus` and duplicated in `StatusControl.tsx` for UX gating |
 | Auth — `src/lib/auth/config.ts` or `src/middleware.ts` | spec §3.4 + `eslint.config.mjs` (no-restricted-imports rule) | Edge-safe boundary. **FORBIDDEN** to import `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, `node:*`. Lint will block even if you forget |
 | Auth — `src/lib/auth/index.ts`, `src/lib/auth/provision.ts` | spec §3.4 + `foundation_followups.md` | Node-side logic, does DB lookups. `provisionUserOnSignIn` is now atomic via INSERT ... ON CONFLICT — don't regress |
 | Server Actions (`src/app/**/actions.ts`) | `foundation_followups.md` (Task 10/11 error UX gap) | Current pattern `throw new Error(...)` falls through to `error.tsx`. v1.1 will migrate to `useFormState` returning `{ ok: false, errors }` |

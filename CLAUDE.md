@@ -1,6 +1,6 @@
 # incident_app — Context for Claude Code
 
-> Web-first incident coordination tool, single org, multi-team, SSO. **Plan 1 (Foundation) shipped 2026-04-28. Plan 2 (Incidents core) shipped 2026-04-28.** Public repo at https://github.com/DiogoHSM/incident_app.
+> Web-first incident coordination tool, single org, multi-team, SSO. **Plan 1 (Foundation) shipped 2026-04-28. Plan 2 (Incidents core) shipped 2026-04-28. Plan 3 (Timeline + mutations) shipped 2026-04-29.** Public repo at https://github.com/DiogoHSM/incident_app.
 
 ## Canonical documentation
 
@@ -31,16 +31,18 @@ Next.js 16 (App Router) · TypeScript strict + `noUncheckedIndexedAccess` · Tai
 - **Test infrastructure**: a single Postgres testcontainer is booted in `tests/setup/global.ts` and reused across all integration files. Per-test isolation is via `TRUNCATE` in `useTestDb()` (`tests/setup/withTx.ts`). `vitest.config.ts` has `fileParallelism: false` because TRUNCATE-per-test is incompatible with parallel file execution against a shared schema.
 - **Migrations forward-only**, generated via `pnpm db:generate`, applied via `pnpm db:migrate` (which passes `dotenv -e .env.local`). Current migrations: `0000` users/teams/team_memberships, `0001` services/runbooks, `0002` incidents/incident_services.
 - **Incident slugs**: minted only by `src/lib/incidents/slug.ts` (`generateIncidentSlug()`). Format `inc-XXXXXXXX` (8 lowercase alphanumerics from `crypto.randomBytes`). `declareIncident` retries up to 3× on the unique violation.
+- **Timeline writes**: every mutation that changes incident state (`changeIncidentStatus`, `changeIncidentSeverity`, `assignIncidentRole`, `appendNote`) writes a `TimelineEvent` row in the same DB transaction. The jsonb body is validated via `TimelineEventBodySchema.parse(...)` (zod discriminated union over `kind`) before insert. Status mutations enforce a state machine and require an IC when leaving `triaging` (except → `resolved`).
 - **Mandatory co-author trailer** on every commit: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 
 ## Notes
 
 - **`.env.local` carries placeholders** for `AUTH_GOOGLE_CLIENT_ID/SECRET` (needed for `pnpm build` to pass the env schema refinement). Swap for real credentials before attempting sign-in. Documented in `.env.example` as a deferred item.
 - **Middleware deprecation warning**: Next 16 wants `proxy.ts`, but `middleware.ts` still works. Rename is in the follow-ups.
-- **`/metrics` in the sidebar still 404s** — that route arrives in Plan 8. `/incidents` is now live (Plan 2). Decide between placeholder route or disabled link for `/metrics` before showing the app to users.
+- **`/metrics` in the sidebar still 404s** — that route arrives in Plan 8. `/incidents` is now live (Plan 2 + Plan 3 wiring). Real-time SSE arrives in Plan 4; until then the page re-renders via `revalidatePath` after each mutation. Decide between placeholder route or disabled link for `/metrics` before showing the app to users.
 
 ## Update history
 
 - 2026-04-28: Initial structure (`.claude/`, `CLAUDE.md`, `GUARDRAILS.md`, `MEMORY.md`).
 - 2026-04-28: **Plan 1 (Foundation) implemented and merged to main**. 26 commits, 31 integration tests passing. Public repo created at https://github.com/DiogoHSM/incident_app. CLAUDE.md + GUARDRAILS.md updated to reflect the real stack.
 - 2026-04-28: **Plan 2 (Incidents core) implemented**. Three Plan 1 follow-up prereqs resolved (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` ON CONFLICT). New `incidents` + `incident_services` tables, `declareIncident`/`listIncidentsForUser`/`findIncidentBySlugForUser` queries with admin-sees-all parity. Routes live: `/incidents`, `/incidents/new`, `/incidents/[slug]` (no real-time, no role mutations, no timeline events — those are Plan 3/4). Test count climbed from 31 to 55. All project content is now English-only (per `.claude/memory/feedback_language_english.md`).
+- 2026-04-29: **Plan 3 (Timeline + mutations) implemented**. New `timeline_events` table (4 kinds: note, status_change, severity_change, role_change). Four mutation queries (`appendNote`, `changeIncidentStatus`, `changeIncidentSeverity`, `assignIncidentRole`) with state-machine guards, IC-required-when-leaving-triaging, atomic event emission inside `db.transaction(...)`. Four Server Actions wire the page form controls. Five new components on `/incidents/[slug]`: `Timeline`, `NoteForm`, `StatusControl`, `SeverityControl`, `RolePickers`. `react-markdown` + `remark-gfm` added for note rendering. Test count climbed from 55 to 118.

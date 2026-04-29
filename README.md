@@ -81,6 +81,11 @@ After running `pnpm dev` against a real Google OAuth client:
 14. [ ] Sign in as a member of a different team — `/incidents` is empty (their team has no incidents).
 15. [ ] Sign in as admin — `/incidents` shows everything across teams.
 16. [ ] Sign out. Visit `/dashboard` directly → redirected to `/signin`.
+- Plan 3: post a note via the Timeline form — note appears in the timeline.
+- Plan 3: change status from a non-triaging state — appears as a `status_change` event.
+- Plan 3: starting in triaging without an IC, attempt → investigating — IC picker appears; selecting one works, submitting without one fails.
+- Plan 3: change severity — appears as a `severity_change` event.
+- Plan 3: assign IC / Scribe / Comms via the Roles section — column updates and `role_change` event appears.
 
 If any step fails, see `.claude/memory/foundation_followups.md` for known v1.1 issues.
 
