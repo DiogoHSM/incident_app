@@ -56,8 +56,11 @@ async function seed(): Promise<World> {
     severity: 'SEV2',
     affectedServiceIds: [],
   });
+  // declareIncident now defaults to 'triaging'; force this fixture to 'investigating' so
+  // the tests that depend on a non-triaging starting state continue to work.
+  await db.update(incidents).set({ status: 'investigating' }).where(eq(incidents.id, investigating.id));
 
-  // Insert a triaging-state incident directly (bypassing declareIncident which defaults to investigating).
+  // Insert a triaging-state incident directly.
   const [triaging] = await db
     .insert(incidents)
     .values({

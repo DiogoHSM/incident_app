@@ -85,7 +85,7 @@ describe('declareIncident', () => {
       affectedServiceIds: [world.serviceA1Id],
     });
     expect(inc.publicSlug).toMatch(/^inc-[a-z0-9]{8}$/);
-    expect(inc.status).toBe('investigating');
+    expect(inc.status).toBe('triaging');
     expect(inc.severity).toBe('SEV2');
     expect(inc.declaredBy).toBe(world.memberAId);
     expect(inc.teamId).toBe(world.teamAId);

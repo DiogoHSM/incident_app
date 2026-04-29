@@ -1,0 +1,1 @@
+ALTER TABLE "incidents" ALTER COLUMN "status" SET DEFAULT 'triaging';

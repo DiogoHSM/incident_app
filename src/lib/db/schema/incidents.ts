@@ -35,7 +35,7 @@ export const incidents = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
     severity: severityEnum('severity').notNull(),
-    status: incidentStatusEnum('status').notNull().default('investigating'),
+    status: incidentStatusEnum('status').notNull().default('triaging'),
     title: text('title').notNull(),
     summary: text('summary').notNull().default(''),
     declaredAt: timestamp('declared_at', { withTimezone: true }).notNull().defaultNow(),
