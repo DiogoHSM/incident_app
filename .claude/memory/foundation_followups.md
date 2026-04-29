@@ -44,3 +44,17 @@ Deferred items from Plan 1 (Foundation) code reviews. Should be addressed before
 
 ### Task 4 — testcontainers scaling
 ~~Per-file testcontainers will hurt by Task 9-12 (5+ integration files).~~ — **DONE in Plan 2 / Task 0a**. Switched to a single shared container in `tests/setup/global.ts` plus `useTestDb()`/`getTestDb()` in `tests/setup/withTx.ts` (TRUNCATE-per-test). `vitest.config.ts` carries `fileParallelism: false` because TRUNCATE-per-test is incompatible with parallel files against a shared schema. Wall time dropped from ~30s to ~5s for 31 tests; now ~6s for 55.
+
+## Plan 3 follow-ups
+
+Items flagged during Plan 3 final code review and intentionally deferred:
+
+1. **`listTeamMembersWithUsers` lacks actor authz.** Today it accepts `(db, teamId)` with no caller identity. The only call site (`page.tsx`) is already authorized via `findIncidentBySlugForUser`, so no leak in practice. Project convention is "authz at the data layer, not the route". Fix: change signature to `(db, actorUserId, teamId)` and add `await requireTeamMember(...)` at the top. Update the call site in `page.tsx`.
+
+2. **Client components import value-or-type exports from `@/lib/db/schema/*`.** `StatusControl.tsx`, `SeverityControl.tsx`, and `Timeline.tsx` reach into the schema modules for `INCIDENT_STATUS_VALUES` / `SEVERITY_VALUES` / `TimelineEvent`. Tree-shaking handles it today (build is clean), but a future Drizzle dep with import-time side effects could break the boundary. Fix: extract pure-value exports (`*_VALUES` arrays + TS types) into `src/lib/incidents/types.ts` and `src/lib/services/types.ts`, re-export from the schema files for backward compat.
+
+3. **`page.tsx` casts `ev.body` to `{ fromUserId, toUserId }` for role_change rendering.** Could call `parseTimelineEventBody(ev.body)` and narrow on `ev.kind === 'role_change'`. The cast is safe because the writer always validates, but the cast is the only place a reader skips the schema. Tighten by removing the cast and parsing.
+
+4. **`changeIncidentStatus` writes the IC `role_change` event before the `status_change` event** when both fire in the same call, but `occurredAt = now()` resolves both inserts to the same timestamp. List query ORDER BY `occurredAt DESC` may return them in ID order, not insertion order — surprise the user reading the timeline. Optional fix: bump the role_change `occurredAt` by 1ms earlier, or accept and document.
+
+5. **`appendNote` parses body before authz**, leaking a parse error to outsiders posting an empty note. Negligible information leak. Conventional pattern is authz-first. Reorder if v1.1 audit cares.

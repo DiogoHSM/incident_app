@@ -420,6 +420,29 @@ describe('assignIncidentRole', () => {
     expect(result).toBeNull();
   });
 
+  test('null → null on an unassigned role is a no-op (no event written)', async () => {
+    const db = getTestDb();
+    // The investigating incident has no IC initially.
+    const result = await assignIncidentRole(
+      db,
+      world.memberAId,
+      world.investigatingId,
+      'ic',
+      null,
+    );
+    expect(result).toBeNull();
+    const events = await db
+      .select()
+      .from(timelineEvents)
+      .where(
+        and(
+          eq(timelineEvents.incidentId, world.investigatingId),
+          eq(timelineEvents.kind, 'role_change'),
+        ),
+      );
+    expect(events).toHaveLength(0);
+  });
+
   test('assigning a non-team-member is rejected', async () => {
     await expect(
       assignIncidentRole(

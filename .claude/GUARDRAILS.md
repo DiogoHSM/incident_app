@@ -35,7 +35,7 @@ Stop and confirm if any of these fail:
 
 - [ ] `bash ~/.claude/scripts/check-context.sh` shows no 🔴
 - [ ] If DB: recent backup; migration tested via `pnpm test` (testcontainers already verifies apply); user authorized applying in prod
-- [ ] If pushing to main: tests pass (currently 55/55); reviewer approved (per-task) or user authorized explicitly
+- [ ] If pushing to main: tests pass (currently 118/118); reviewer approved (per-task) or user authorized explicitly
 - [ ] If publishing repo / creating cloud resource: user authorized name and visibility
 
 Destructive: `rm -rf`, `DROP TABLE`, `git push --force`, `git reset --hard`, deleting published branches, amending pushed commits, deploying to production, creating public repo, deleting Postgres containers/volumes with data.
