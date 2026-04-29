@@ -4,6 +4,10 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import * as schema from '@/lib/db/schema';
 
+// 32 zero bytes, base64 — TEST ONLY
+process.env.WEBHOOK_SECRET_ENCRYPTION_KEY ??=
+  'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
 let container: StartedPostgreSqlContainer | undefined;
 
 export async function setup(): Promise<void> {
