@@ -3,7 +3,11 @@ import { teams } from '@/lib/db/schema/teams';
 import { services } from '@/lib/db/schema/services';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { users } from '@/lib/db/schema/users';
-import { listServicesForUser, createService } from '@/lib/db/queries/services';
+import {
+  listServicesForUser,
+  createService,
+  findServiceBySlugForUser,
+} from '@/lib/db/queries/services';
 import { ForbiddenError } from '@/lib/authz';
 import { DB_ERR_UNIQUE, expectDbError, getTestDb, useTestDb } from '../setup/db';
 
@@ -82,5 +86,38 @@ describe('services schema', () => {
     });
     expect(created.id).toBeTruthy();
     expect(created.slug).toBe('svc');
+  });
+
+  it('listServicesForUser returns all services for an admin without memberships', async () => {
+    const db = getTestDb();
+    const [admin] = await db
+      .insert(users)
+      .values({ email: 'admin@x.co', name: 'A', ssoSubject: 's|admin', role: 'admin' })
+      .returning();
+    expect(admin).toBeDefined();
+    const [team] = await db.insert(teams).values({ name: 'T', slug: 't' }).returning();
+    expect(team).toBeDefined();
+    await db.insert(services).values([
+      { teamId: team!.id, name: 'svc-a', slug: 'svc-a' },
+      { teamId: team!.id, name: 'svc-b', slug: 'svc-b' },
+    ]);
+
+    const seen = await listServicesForUser(db, admin!.id);
+    expect(seen.map((s) => s.slug).sort()).toEqual(['svc-a', 'svc-b']);
+  });
+
+  it('findServiceBySlugForUser returns row for an admin without membership', async () => {
+    const db = getTestDb();
+    const [admin] = await db
+      .insert(users)
+      .values({ email: 'admin2@x.co', name: 'A2', ssoSubject: 's|admin2', role: 'admin' })
+      .returning();
+    expect(admin).toBeDefined();
+    const [team] = await db.insert(teams).values({ name: 'T2', slug: 't2' }).returning();
+    expect(team).toBeDefined();
+    await db.insert(services).values({ teamId: team!.id, name: 'svc-c', slug: 'svc-c' });
+
+    const found = await findServiceBySlugForUser(db, admin!.id, 'svc-c');
+    expect(found?.slug).toBe('svc-c');
   });
 });

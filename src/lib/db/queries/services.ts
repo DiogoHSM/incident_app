@@ -2,9 +2,14 @@ import { eq, inArray } from 'drizzle-orm';
 import { type DB } from '@/lib/db/client';
 import { services, type Service, type NewService } from '@/lib/db/schema/services';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
+import { findUserById } from '@/lib/db/queries/users';
 import { requireTeamMember } from '@/lib/authz';
 
 export async function listServicesForUser(db: DB, userId: string): Promise<Service[]> {
+  const user = await findUserById(db, userId);
+  if (!user) return [];
+  if (user.role === 'admin') return db.select().from(services);
+
   const memberships = await db
     .select({ teamId: teamMemberships.teamId })
     .from(teamMemberships)
@@ -26,6 +31,12 @@ export async function findServiceBySlugForUser(
   userId: string,
   slug: string,
 ): Promise<Service | null> {
+  const user = await findUserById(db, userId);
+  if (!user) return null;
+  if (user.role === 'admin') {
+    const [row] = await db.select().from(services).where(eq(services.slug, slug)).limit(1);
+    return row ?? null;
+  }
   const list = await listServicesForUser(db, userId);
   return list.find((s) => s.slug === slug) ?? null;
 }
