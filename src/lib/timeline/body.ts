@@ -18,6 +18,7 @@ const StatusChangeBody = z.object({
     .string()
     .max(500)
     .transform((s) => s.trim())
+    .pipe(z.string().min(1))
     .optional(),
 });
 

@@ -40,6 +40,31 @@ describe('TimelineEventBodySchema', () => {
     expect(parsed).toMatchObject({ reason: 'rolled back deploy' });
   });
 
+  test('status_change rejects whitespace-only reason', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'status_change',
+        from: 'investigating',
+        to: 'identified',
+        reason: '   ',
+      }),
+    ).toThrow();
+  });
+
+  test('status_change without reason parses cleanly', () => {
+    const parsed = TimelineEventBodySchema.parse({
+      kind: 'status_change',
+      from: 'investigating',
+      to: 'identified',
+    });
+    expect(parsed).toMatchObject({ kind: 'status_change', from: 'investigating', to: 'identified' });
+    if (parsed.kind === 'status_change') {
+      expect(parsed.reason).toBeUndefined();
+    } else {
+      throw new Error('expected status_change');
+    }
+  });
+
   test('severity_change shape', () => {
     expect(
       TimelineEventBodySchema.parse({ kind: 'severity_change', from: 'SEV3', to: 'SEV1' }),
