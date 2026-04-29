@@ -58,11 +58,23 @@ export default async function IncidentDetailPage({
     listTimelineEventsForIncident(db, userId, incident.id),
   ]);
 
-  // Resolve author names for all timeline event authors.
-  const authorIds = [...new Set(events.map((e) => e.authorUserId).filter((id): id is string => id !== null))];
+  // Resolve author names. Covers each event's actor + role_change body targets
+  // (fromUserId / toUserId), so role_change rows render names instead of UUIDs.
+  const involvedUserIds = new Set<string>();
+  for (const ev of events) {
+    if (ev.authorUserId) involvedUserIds.add(ev.authorUserId);
+    if (ev.kind === 'role_change') {
+      const body = ev.body as { fromUserId: string | null; toUserId: string | null };
+      if (body.fromUserId) involvedUserIds.add(body.fromUserId);
+      if (body.toUserId) involvedUserIds.add(body.toUserId);
+    }
+  }
   const authorRows =
-    authorIds.length > 0
-      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, authorIds))
+    involvedUserIds.size > 0
+      ? await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(inArray(users.id, [...involvedUserIds]))
       : [];
   const authorMap = new Map<string, string>(authorRows.map((r) => [r.id, r.name]));
 
