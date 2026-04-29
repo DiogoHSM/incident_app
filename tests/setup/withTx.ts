@@ -20,6 +20,8 @@ export function getTestDb(): TestDB {
 const TABLES = [
   'timeline_events',
   'incident_services',
+  'action_items',
+  'postmortems',
   'incidents',
   'runbooks',
   'services',

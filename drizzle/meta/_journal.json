@@ -36,6 +36,13 @@
       "when": 1777477033612,
       "tag": "0004_jazzy_red_shift",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777493085720,
+      "tag": "0005_rare_madrox",
+      "breakpoints": true
     }
   ]
 }
