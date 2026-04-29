@@ -17,6 +17,7 @@ import { NoteForm } from './_components/NoteForm';
 import { StatusControl } from './_components/StatusControl';
 import { SeverityControl } from './_components/SeverityControl';
 import { RolePickers } from './_components/RolePickers';
+import { PostmortemTrigger } from './_components/PostmortemTrigger';
 
 function durationLabel(start: Date, end: Date | null): string {
   const ms = (end ?? new Date()).getTime() - start.getTime();
@@ -140,6 +141,11 @@ export default async function IncidentDetailPage({
             }}
             teamMembers={teamMembers.map((m) => ({ id: m.id, name: m.name }))}
           />
+        </section>
+
+        <section className="rounded border border-neutral-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-medium text-neutral-700">Postmortem</h2>
+          <PostmortemTrigger slug={incident.publicSlug} />
         </section>
 
         <section className="rounded border border-neutral-200 bg-white p-4">
