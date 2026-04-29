@@ -7,3 +7,4 @@ export * from './incidents';
 export * from './timeline';
 export * from './postmortems';
 export * from './action-items';
+export * from './webhook-sources';
