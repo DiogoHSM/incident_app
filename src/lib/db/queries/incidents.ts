@@ -126,9 +126,7 @@ export async function listIncidentsForUser(
     ).map((r) => r.teamId);
     if (myTeamIds.length === 0) return [];
 
-    const scopeTeams = filters.teamId
-      ? myTeamIds.filter((t) => t === filters.teamId)
-      : myTeamIds;
+    const scopeTeams = filters.teamId ? myTeamIds.filter((t) => t === filters.teamId) : myTeamIds;
     if (scopeTeams.length === 0) return [];
     conditions.push(inArray(incidents.teamId, scopeTeams));
   } else if (filters.teamId) {

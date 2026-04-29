@@ -16,7 +16,10 @@ describe('services schema', () => {
 
   it('enforces unique (team_id, slug)', async () => {
     const db = getTestDb();
-    const [team] = await db.insert(teams).values({ name: 'Payments', slug: 'payments' }).returning();
+    const [team] = await db
+      .insert(teams)
+      .values({ name: 'Payments', slug: 'payments' })
+      .returning();
     expect(team).toBeDefined();
     await db.insert(services).values({ teamId: team!.id, name: 'Checkout', slug: 'checkout' });
     await expect(

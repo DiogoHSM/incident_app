@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { users } from '@/lib/db/schema/users';
-import {
-  DB_ERR_NOT_NULL,
-  DB_ERR_UNIQUE,
-  expectDbError,
-  getTestDb,
-  useTestDb,
-} from '../setup/db';
+import { DB_ERR_NOT_NULL, DB_ERR_UNIQUE, expectDbError, getTestDb, useTestDb } from '../setup/db';
 
 describe('users schema', () => {
   useTestDb();
