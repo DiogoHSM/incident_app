@@ -261,48 +261,58 @@ class DispatcherImpl implements RealtimeDispatcher {
   }
 
   private async onNotify(raw: string): Promise<void> {
-    let parsed;
     try {
-      parsed = IncidentUpdatePayloadSchema.parse(JSON.parse(raw));
-    } catch {
-      // Drop malformed payloads — a corrupt NOTIFY must never take down the listener.
-      return;
-    }
-    const subs = this.subscribersByIncident.get(parsed.incidentId);
-    if (!subs || subs.size === 0) return;
-
-    const [row] = await this.fetchDb
-      .select({
-        id: timelineEvents.id,
-        incidentId: timelineEvents.incidentId,
-        authorUserId: timelineEvents.authorUserId,
-        kind: timelineEvents.kind,
-        body: timelineEvents.body,
-        occurredAt: timelineEvents.occurredAt,
-        authorName: users.name,
-      })
-      .from(timelineEvents)
-      .leftJoin(users, eq(users.id, timelineEvents.authorUserId))
-      .where(eq(timelineEvents.id, parsed.eventId))
-      .limit(1);
-    if (!row) return;
-
-    const onWire: TimelineEventOnWire = {
-      id: row.id,
-      incidentId: row.incidentId,
-      authorUserId: row.authorUserId,
-      kind: row.kind,
-      body: row.body,
-      occurredAt: row.occurredAt,
-      authorName: row.authorName ?? null,
-    };
-
-    for (const listener of subs) {
+      let parsed;
       try {
-        listener(onWire);
-      } catch {
-        // One bad listener must not break the others.
+        parsed = IncidentUpdatePayloadSchema.parse(JSON.parse(raw));
+      } catch (err) {
+        // Drop malformed payloads — a corrupt NOTIFY must never take down the listener.
+        console.error('[realtime] malformed NOTIFY payload, dropping', err);
+        return;
       }
+      const subs = this.subscribersByIncident.get(parsed.incidentId);
+      if (!subs || subs.size === 0) return;
+
+      const [row] = await this.fetchDb
+        .select({
+          id: timelineEvents.id,
+          incidentId: timelineEvents.incidentId,
+          authorUserId: timelineEvents.authorUserId,
+          kind: timelineEvents.kind,
+          body: timelineEvents.body,
+          occurredAt: timelineEvents.occurredAt,
+          authorName: users.name,
+        })
+        .from(timelineEvents)
+        .leftJoin(users, eq(users.id, timelineEvents.authorUserId))
+        .where(eq(timelineEvents.id, parsed.eventId))
+        .limit(1);
+      if (!row) {
+        console.warn('[realtime] timeline event not found for id', parsed.eventId);
+        return;
+      }
+
+      const onWire: TimelineEventOnWire = {
+        id: row.id,
+        incidentId: row.incidentId,
+        authorUserId: row.authorUserId,
+        kind: row.kind,
+        body: row.body,
+        occurredAt: row.occurredAt,
+        authorName: row.authorName ?? null,
+      };
+
+      for (const listener of subs) {
+        try {
+          listener(onWire);
+        } catch (err) {
+          // One bad listener must not break the others.
+          console.error('[realtime] listener threw, continuing', err);
+        }
+      }
+    } catch (err) {
+      // Outer guard: a thrown SELECT (DB blip) must not become an unhandled rejection.
+      console.error('[realtime] unhandled error in onNotify', err);
     }
   }
 
@@ -341,9 +351,7 @@ export function getRealtimeDispatcher(): RealtimeDispatcher & { whenReady(): Pro
   let d = globalForDispatcher.realtimeDispatcher;
   if (!d) {
     d = new DispatcherImpl(env.DATABASE_URL);
-    if (process.env.NODE_ENV !== 'production') {
-      globalForDispatcher.realtimeDispatcher = d;
-    }
+    globalForDispatcher.realtimeDispatcher = d;
   }
   return d;
 }
