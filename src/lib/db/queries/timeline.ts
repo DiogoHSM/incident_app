@@ -7,6 +7,7 @@ import {
 import { incidents } from '@/lib/db/schema/incidents';
 import { ForbiddenError, requireTeamMember } from '@/lib/authz';
 import { TimelineEventBodySchema } from '@/lib/timeline/body';
+import { notifyIncidentUpdate } from '@/lib/realtime/notify';
 
 async function loadIncidentForActor(
   db: DB,
@@ -32,17 +33,27 @@ export async function appendNote(
   const body = TimelineEventBodySchema.parse({ kind: 'note', markdown });
   const inc = await loadIncidentForActor(db, actorUserId, incidentId);
 
-  const [row] = await db
-    .insert(timelineEvents)
-    .values({
-      incidentId: inc.id,
-      authorUserId: actorUserId,
-      kind: 'note',
-      body,
-    })
-    .returning();
-  if (!row) throw new Error('Insert returned no rows');
-  return row;
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(timelineEvents)
+      .values({
+        incidentId: inc.id,
+        authorUserId: actorUserId,
+        kind: 'note',
+        body,
+      })
+      .returning();
+    if (!row) throw new Error('Insert returned no rows');
+
+    await notifyIncidentUpdate(tx as unknown as DB, {
+      incidentId: row.incidentId,
+      eventId: row.id,
+      kind: row.kind,
+      occurredAt: row.occurredAt.toISOString(),
+    });
+
+    return row;
+  });
 }
 
 export interface ListTimelineOptions {

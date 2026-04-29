@@ -13,6 +13,7 @@ import { requireTeamMember, ForbiddenError } from '@/lib/authz';
 import { generateIncidentSlug } from '@/lib/incidents/slug';
 import { timelineEvents } from '@/lib/db/schema/timeline';
 import { TimelineEventBodySchema, type IncidentRole } from '@/lib/timeline/body';
+import { notifyIncidentUpdate } from '@/lib/realtime/notify';
 
 export interface DeclareIncidentInput {
   teamId: string;
@@ -268,11 +269,21 @@ export async function changeIncidentStatus(
         fromUserId: current.icUserId,
         toUserId: assigningIcId,
       });
-      await tx.insert(timelineEvents).values({
-        incidentId,
-        authorUserId: actorUserId,
+      const [roleEvent] = await tx
+        .insert(timelineEvents)
+        .values({
+          incidentId,
+          authorUserId: actorUserId,
+          kind: 'role_change',
+          body: roleBody,
+        })
+        .returning();
+      if (!roleEvent) throw new Error('Insert returned no rows');
+      await notifyIncidentUpdate(tx as unknown as DB, {
+        incidentId: roleEvent.incidentId,
+        eventId: roleEvent.id,
         kind: 'role_change',
-        body: roleBody,
+        occurredAt: roleEvent.occurredAt.toISOString(),
       });
     }
 
@@ -292,6 +303,13 @@ export async function changeIncidentStatus(
       })
       .returning();
     if (!statusEvent) throw new Error('Insert returned no rows');
+
+    await notifyIncidentUpdate(tx as unknown as DB, {
+      incidentId: statusEvent.incidentId,
+      eventId: statusEvent.id,
+      kind: 'status_change',
+      occurredAt: statusEvent.occurredAt.toISOString(),
+    });
 
     return { incident: updated, statusEvent };
   });
@@ -353,6 +371,13 @@ export async function assignIncidentRole(
       .returning();
     if (!event) throw new Error('Insert returned no rows');
 
+    await notifyIncidentUpdate(tx as unknown as DB, {
+      incidentId: event.incidentId,
+      eventId: event.id,
+      kind: 'role_change',
+      occurredAt: event.occurredAt.toISOString(),
+    });
+
     return { incident: updated, event };
   });
 }
@@ -397,6 +422,13 @@ export async function changeIncidentSeverity(
       })
       .returning();
     if (!event) throw new Error('Insert returned no rows');
+
+    await notifyIncidentUpdate(tx as unknown as DB, {
+      incidentId: event.incidentId,
+      eventId: event.id,
+      kind: 'severity_change',
+      occurredAt: event.occurredAt.toISOString(),
+    });
 
     return { incident: updated, event };
   });
