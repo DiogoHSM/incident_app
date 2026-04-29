@@ -170,3 +170,83 @@ describe('declareIncident', () => {
     ).rejects.toThrow(expectDbError(DB_ERR_FK));
   });
 });
+
+describe('listIncidentsForUser', () => {
+  let world: World;
+  beforeEach(async () => {
+    world = await seed();
+    const db = getTestDb();
+    await declareIncident(db, world.memberAId, {
+      teamId: world.teamAId,
+      title: 'A sev1',
+      summary: '',
+      severity: 'SEV1',
+      affectedServiceIds: [],
+    });
+    await declareIncident(db, world.memberAId, {
+      teamId: world.teamAId,
+      title: 'A sev3',
+      summary: '',
+      severity: 'SEV3',
+      affectedServiceIds: [],
+    });
+    const [old] = await db
+      .insert(incidents)
+      .values({
+        publicSlug: 'inc-old00000',
+        teamId: world.teamAId,
+        declaredBy: world.memberAId,
+        severity: 'SEV4',
+        title: 'A old',
+        summary: '',
+        declaredAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 60),
+      })
+      .returning();
+    expect(old).toBeTruthy();
+    await declareIncident(db, world.memberBId, {
+      teamId: world.teamBId,
+      title: 'B sev2',
+      summary: '',
+      severity: 'SEV2',
+      affectedServiceIds: [],
+    });
+  });
+
+  test('member sees only their team and only the last 30 days by default', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.memberAId, {});
+    const titles = list.map((r) => r.title).sort();
+    expect(titles).toEqual(['A sev1', 'A sev3']);
+  });
+
+  test('admin sees everything across teams within the window', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.adminId, {});
+    expect(list.map((r) => r.title).sort()).toEqual(['A sev1', 'A sev3', 'B sev2']);
+  });
+
+  test('daysBack=90 includes the old one', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.memberAId, { daysBack: 90 });
+    expect(list.map((r) => r.title).sort()).toEqual(['A old', 'A sev1', 'A sev3']);
+  });
+
+  test('severity filter narrows the list', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.adminId, { severity: 'SEV1' });
+    expect(list.map((r) => r.title)).toEqual(['A sev1']);
+  });
+
+  test('teamId filter for admin', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.adminId, { teamId: world.teamBId });
+    expect(list.map((r) => r.title)).toEqual(['B sev2']);
+  });
+
+  test('teamId filter ignored if member tries to peek another team', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.memberAId, {
+      teamId: world.teamBId,
+    });
+    expect(list).toEqual([]);
+  });
+
+  test('outsider sees nothing', async () => {
+    const list = await listIncidentsForUser(getTestDb(), world.outsiderId, {});
+    expect(list).toEqual([]);
+  });
+});

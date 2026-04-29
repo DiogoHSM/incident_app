@@ -1,6 +1,11 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray } from 'drizzle-orm';
 import { type DB } from '@/lib/db/client';
-import { incidents, incidentServices, type Incident } from '@/lib/db/schema/incidents';
+import {
+  incidents,
+  incidentServices,
+  type Incident,
+  type IncidentStatus,
+} from '@/lib/db/schema/incidents';
 import { services, type Severity } from '@/lib/db/schema/services';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { findUserById } from '@/lib/db/queries/users';
@@ -90,9 +95,51 @@ async function assertCanAttachServices(
   }
 }
 
-// Implemented in Task 5.
-export async function listIncidentsForUser(): Promise<never> {
-  throw new Error('Not implemented yet — see Task 5');
+export interface ListIncidentFilters {
+  status?: IncidentStatus;
+  severity?: Severity;
+  teamId?: string;
+  daysBack?: number;
+}
+
+export async function listIncidentsForUser(
+  db: DB,
+  userId: string,
+  filters: ListIncidentFilters,
+): Promise<Incident[]> {
+  const user = await findUserById(db, userId);
+  if (!user) return [];
+
+  const days = filters.daysBack ?? 30;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const conditions = [gte(incidents.declaredAt, since)];
+
+  if (filters.status) conditions.push(eq(incidents.status, filters.status));
+  if (filters.severity) conditions.push(eq(incidents.severity, filters.severity));
+
+  if (user.role !== 'admin') {
+    const myTeamIds = (
+      await db
+        .select({ teamId: teamMemberships.teamId })
+        .from(teamMemberships)
+        .where(eq(teamMemberships.userId, userId))
+    ).map((r) => r.teamId);
+    if (myTeamIds.length === 0) return [];
+
+    const scopeTeams = filters.teamId
+      ? myTeamIds.filter((t) => t === filters.teamId)
+      : myTeamIds;
+    if (scopeTeams.length === 0) return [];
+    conditions.push(inArray(incidents.teamId, scopeTeams));
+  } else if (filters.teamId) {
+    conditions.push(eq(incidents.teamId, filters.teamId));
+  }
+
+  return db
+    .select()
+    .from(incidents)
+    .where(and(...conditions))
+    .orderBy(desc(incidents.declaredAt));
 }
 
 // Implemented in Task 6.
