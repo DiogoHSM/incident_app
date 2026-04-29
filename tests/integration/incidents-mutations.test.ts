@@ -10,6 +10,7 @@ import { ForbiddenError } from '@/lib/authz';
 import {
   declareIncident,
   changeIncidentStatus,
+  changeIncidentSeverity,
   IncidentStateMachineError,
 } from '@/lib/db/queries/incidents';
 
@@ -286,5 +287,57 @@ describe('changeIncidentStatus — authz', () => {
       {},
     );
     expect(result!.incident.status).toBe('identified');
+  });
+});
+
+describe('changeIncidentSeverity', () => {
+  useTestDb();
+  let world: World;
+  beforeEach(async () => {
+    world = await seed();
+  });
+
+  test('member can change SEV2 → SEV1 and writes severity_change event', async () => {
+    const db = getTestDb();
+    const result = await changeIncidentSeverity(
+      db,
+      world.memberAId,
+      world.investigatingId,
+      'SEV1',
+    );
+    expect(result!.incident.severity).toBe('SEV1');
+    const events = await db
+      .select()
+      .from(timelineEvents)
+      .where(eq(timelineEvents.incidentId, world.investigatingId));
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe('severity_change');
+    expect(events[0]!.body).toMatchObject({ from: 'SEV2', to: 'SEV1' });
+  });
+
+  test('same-tier call is a no-op', async () => {
+    const result = await changeIncidentSeverity(
+      getTestDb(),
+      world.memberAId,
+      world.investigatingId,
+      'SEV2',
+    );
+    expect(result).toBeNull();
+  });
+
+  test('outsider rejected', async () => {
+    await expect(
+      changeIncidentSeverity(getTestDb(), world.outsiderId, world.investigatingId, 'SEV1'),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  test('admin can change without membership', async () => {
+    const result = await changeIncidentSeverity(
+      getTestDb(),
+      world.adminId,
+      world.investigatingId,
+      'SEV4',
+    );
+    expect(result!.incident.severity).toBe('SEV4');
   });
 });

@@ -296,3 +296,48 @@ export async function changeIncidentStatus(
     return { incident: updated, statusEvent };
   });
 }
+
+export async function changeIncidentSeverity(
+  db: DB,
+  actorUserId: string,
+  incidentId: string,
+  toSeverity: Severity,
+): Promise<{ incident: Incident; event: typeof timelineEvents.$inferSelect } | null> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, incidentId))
+      .limit(1);
+    if (!current) throw new Error('Incident not found');
+
+    await requireTeamMember(tx as unknown as DB, actorUserId, current.teamId);
+
+    if (current.severity === toSeverity) return null;
+
+    const [updated] = await tx
+      .update(incidents)
+      .set({ severity: toSeverity, updatedAt: new Date() })
+      .where(eq(incidents.id, incidentId))
+      .returning();
+    if (!updated) throw new Error('Update returned no rows');
+
+    const body = TimelineEventBodySchema.parse({
+      kind: 'severity_change',
+      from: current.severity,
+      to: toSeverity,
+    });
+    const [event] = await tx
+      .insert(timelineEvents)
+      .values({
+        incidentId,
+        authorUserId: actorUserId,
+        kind: 'severity_change',
+        body,
+      })
+      .returning();
+    if (!event) throw new Error('Insert returned no rows');
+
+    return { incident: updated, event };
+  });
+}
