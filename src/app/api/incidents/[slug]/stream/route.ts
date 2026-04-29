@@ -1,4 +1,4 @@
-import { eq, and, gt } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { findIncidentBySlugForUser } from '@/lib/db/queries/incidents';
@@ -49,7 +49,32 @@ async function backfillSinceLastEventId(
     .leftJoin(users, eq(users.id, timelineEvents.authorUserId))
     .where(and(eq(timelineEvents.incidentId, incidentId), gt(timelineEvents.occurredAt, anchor.occurredAt)))
     .orderBy(timelineEvents.occurredAt);
-  return rows.map((r) => ({ ...r, authorName: r.authorName ?? null }));
+  const targetIds = new Set<string>();
+  for (const r of rows) {
+    if (r.kind === 'role_change') {
+      const body = r.body as { fromUserId: string | null; toUserId: string | null };
+      if (body.fromUserId) targetIds.add(body.fromUserId);
+      if (body.toUserId) targetIds.add(body.toUserId);
+    }
+  }
+  const targetNames = new Map<string, string | null>();
+  if (targetIds.size > 0) {
+    const targetRows = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, [...targetIds]));
+    for (const t of targetRows) targetNames.set(t.id, t.name);
+  }
+  return rows.map((r) => {
+    let fromUserName: string | null = null;
+    let toUserName: string | null = null;
+    if (r.kind === 'role_change') {
+      const body = r.body as { fromUserId: string | null; toUserId: string | null };
+      fromUserName = body.fromUserId ? (targetNames.get(body.fromUserId) ?? null) : null;
+      toUserName = body.toUserId ? (targetNames.get(body.toUserId) ?? null) : null;
+    }
+    return { ...r, authorName: r.authorName ?? null, fromUserName, toUserName };
+  });
 }
 
 export async function GET(request: Request, ctx: RouteCtx): Promise<Response> {

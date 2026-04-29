@@ -126,10 +126,13 @@ function TimelineBodyView({
     fromUserId: string | null;
     toUserId: string | null;
   };
+  const fromName =
+    event.fromUserName ?? (body.fromUserId ? lookupAuthor(authors, body.fromUserId) : 'system');
+  const toName =
+    event.toUserName ?? (body.toUserId ? lookupAuthor(authors, body.toUserId) : 'system');
   return (
     <p className="text-neutral-700">
-      {body.role.toUpperCase()}: {lookupAuthor(authors, body.fromUserId)} →{' '}
-      {lookupAuthor(authors, body.toUserId)}
+      {body.role.toUpperCase()}: {fromName} → {toName}
     </p>
   );
 }

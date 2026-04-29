@@ -10,7 +10,7 @@ export interface NoteFormProps {
 }
 
 export function NoteForm({ slug, currentUserId }: NoteFormProps): React.JSX.Element {
-  const { addOptimisticNote, markOptimisticError, events } = useIncidentLive();
+  const { addOptimisticNote, markOptimisticError } = useIncidentLive();
   const [pending, setPending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -22,21 +22,18 @@ export function NoteForm({ slug, currentUserId }: NoteFormProps): React.JSX.Elem
     setPending(true);
     if (textareaRef.current) textareaRef.current.value = '';
 
-    // Fail-safe: if no canonical event echoes in 5 s, mark the optimistic
-    // entry as errored. The provider's reconcileOptimistic clears the
-    // pending entry on echo, so this will only ever fire when the round-trip
-    // genuinely failed.
-    const timeout = setTimeout(() => {
-      const stillPending = events.some((e) => e.source === 'optimistic' && e.id === optimisticId);
-      if (stillPending) markOptimisticError(optimisticId, 'Server did not confirm — try again.');
-    }, 5_000);
-
     try {
       await addNoteAction(form);
+      // Action committed. Now wait for the SSE echo. If it never arrives,
+      // surface the error after 5 s. reconcileOptimistic in the provider
+      // replaces the optimistic entry on echo, making markOptimisticError
+      // a no-op.
+      setTimeout(() => {
+        markOptimisticError(optimisticId, 'Server did not confirm — try again.');
+      }, 5_000);
     } catch (err) {
       markOptimisticError(optimisticId, err instanceof Error ? err.message : 'Failed to post.');
     } finally {
-      clearTimeout(timeout);
       setPending(false);
     }
   }

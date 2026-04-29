@@ -23,7 +23,12 @@ type Optimistic = {
 };
 
 export type DisplayedEvent =
-  | (TimelineEvent & { source: 'server'; authorName: string | null })
+  | (TimelineEvent & {
+      source: 'server';
+      authorName: string | null;
+      fromUserName: string | null;
+      toUserName: string | null;
+    })
   | (Optimistic & { source: 'optimistic' });
 
 type ConnectionState = 'connecting' | 'live' | 'reconnecting';
@@ -65,6 +70,8 @@ export function IncidentLiveProvider({
       ...e,
       source: 'server' as const,
       authorName: initialAuthors.find((a) => a.id === e.authorUserId)?.name ?? null,
+      fromUserName: null,
+      toUserName: null,
     })),
   );
   const [authors, setAuthors] = useState<Map<string, string | null>>(

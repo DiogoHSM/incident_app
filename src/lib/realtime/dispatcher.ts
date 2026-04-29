@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '@/lib/db/schema';
@@ -70,6 +70,24 @@ class DispatcherImpl implements RealtimeDispatcher {
         return;
       }
 
+      let fromUserName: string | null = null;
+      let toUserName: string | null = null;
+      if (row.kind === 'role_change') {
+        const body = row.body as { fromUserId: string | null; toUserId: string | null };
+        const targetIds: string[] = [];
+        if (body.fromUserId) targetIds.push(body.fromUserId);
+        if (body.toUserId) targetIds.push(body.toUserId);
+        if (targetIds.length > 0) {
+          const targets = await this.fetchDb
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(inArray(users.id, targetIds));
+          const m = new Map(targets.map((t) => [t.id, t.name]));
+          fromUserName = body.fromUserId ? (m.get(body.fromUserId) ?? null) : null;
+          toUserName = body.toUserId ? (m.get(body.toUserId) ?? null) : null;
+        }
+      }
+
       const onWire: TimelineEventOnWire = {
         id: row.id,
         incidentId: row.incidentId,
@@ -78,6 +96,8 @@ class DispatcherImpl implements RealtimeDispatcher {
         body: row.body,
         occurredAt: row.occurredAt,
         authorName: row.authorName ?? null,
+        fromUserName,
+        toUserName,
       };
 
       for (const listener of subs) {

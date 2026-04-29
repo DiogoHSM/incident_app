@@ -13,4 +13,6 @@ export type IncidentUpdatePayload = z.infer<typeof IncidentUpdatePayloadSchema>;
 
 export interface TimelineEventOnWire extends TimelineEvent {
   authorName: string | null;
+  fromUserName: string | null;
+  toUserName: string | null;
 }

@@ -135,6 +135,8 @@ export type IncidentUpdatePayload = z.infer<typeof IncidentUpdatePayloadSchema>;
 
 export interface TimelineEventOnWire extends TimelineEvent {
   authorName: string | null;
+  fromUserName: string | null;
+  toUserName: string | null;
 }
 ```
 
@@ -220,7 +222,7 @@ EOF
 
 ```ts
 // src/lib/realtime/dispatcher.ts
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '@/lib/db/schema';
@@ -292,6 +294,24 @@ class DispatcherImpl implements RealtimeDispatcher {
         return;
       }
 
+      let fromUserName: string | null = null;
+      let toUserName: string | null = null;
+      if (row.kind === 'role_change') {
+        const body = row.body as { fromUserId: string | null; toUserId: string | null };
+        const targetIds: string[] = [];
+        if (body.fromUserId) targetIds.push(body.fromUserId);
+        if (body.toUserId) targetIds.push(body.toUserId);
+        if (targetIds.length > 0) {
+          const targets = await this.fetchDb
+            .select({ id: users.id, name: users.name })
+            .from(users)
+            .where(inArray(users.id, targetIds));
+          const m = new Map(targets.map((t) => [t.id, t.name]));
+          fromUserName = body.fromUserId ? (m.get(body.fromUserId) ?? null) : null;
+          toUserName = body.toUserId ? (m.get(body.toUserId) ?? null) : null;
+        }
+      }
+
       const onWire: TimelineEventOnWire = {
         id: row.id,
         incidentId: row.incidentId,
@@ -300,6 +320,8 @@ class DispatcherImpl implements RealtimeDispatcher {
         body: row.body,
         occurredAt: row.occurredAt,
         authorName: row.authorName ?? null,
+        fromUserName,
+        toUserName,
       };
 
       for (const listener of subs) {
@@ -765,7 +787,7 @@ EOF
 
 ```ts
 // src/app/api/incidents/[slug]/stream/route.ts
-import { eq, and, gt } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { findIncidentBySlugForUser } from '@/lib/db/queries/incidents';
@@ -816,7 +838,32 @@ async function backfillSinceLastEventId(
     .leftJoin(users, eq(users.id, timelineEvents.authorUserId))
     .where(and(eq(timelineEvents.incidentId, incidentId), gt(timelineEvents.occurredAt, anchor.occurredAt)))
     .orderBy(timelineEvents.occurredAt);
-  return rows.map((r) => ({ ...r, authorName: r.authorName ?? null }));
+  const targetIds = new Set<string>();
+  for (const r of rows) {
+    if (r.kind === 'role_change') {
+      const body = r.body as { fromUserId: string | null; toUserId: string | null };
+      if (body.fromUserId) targetIds.add(body.fromUserId);
+      if (body.toUserId) targetIds.add(body.toUserId);
+    }
+  }
+  const targetNames = new Map<string, string | null>();
+  if (targetIds.size > 0) {
+    const targetRows = await db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(inArray(users.id, [...targetIds]));
+    for (const t of targetRows) targetNames.set(t.id, t.name);
+  }
+  return rows.map((r) => {
+    let fromUserName: string | null = null;
+    let toUserName: string | null = null;
+    if (r.kind === 'role_change') {
+      const body = r.body as { fromUserId: string | null; toUserId: string | null };
+      fromUserName = body.fromUserId ? (targetNames.get(body.fromUserId) ?? null) : null;
+      toUserName = body.toUserId ? (targetNames.get(body.toUserId) ?? null) : null;
+    }
+    return { ...r, authorName: r.authorName ?? null, fromUserName, toUserName };
+  });
 }
 
 export async function GET(request: Request, ctx: RouteCtx): Promise<Response> {
@@ -993,7 +1040,12 @@ type Optimistic = {
 };
 
 export type DisplayedEvent =
-  | (TimelineEvent & { source: 'server'; authorName: string | null })
+  | (TimelineEvent & {
+      source: 'server';
+      authorName: string | null;
+      fromUserName: string | null;
+      toUserName: string | null;
+    })
   | (Optimistic & { source: 'optimistic' });
 
 type ConnectionState = 'connecting' | 'live' | 'reconnecting';
@@ -1035,6 +1087,8 @@ export function IncidentLiveProvider({
       ...e,
       source: 'server' as const,
       authorName: initialAuthors.find((a) => a.id === e.authorUserId)?.name ?? null,
+      fromUserName: null,
+      toUserName: null,
     })),
   );
   const [authors, setAuthors] = useState<Map<string, string | null>>(
@@ -1250,7 +1304,7 @@ export interface NoteFormProps {
 }
 
 export function NoteForm({ slug, currentUserId }: NoteFormProps): React.JSX.Element {
-  const { addOptimisticNote, markOptimisticError, events } = useIncidentLive();
+  const { addOptimisticNote, markOptimisticError } = useIncidentLive();
   const [pending, setPending] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -1262,21 +1316,18 @@ export function NoteForm({ slug, currentUserId }: NoteFormProps): React.JSX.Elem
     setPending(true);
     if (textareaRef.current) textareaRef.current.value = '';
 
-    // Fail-safe: if no canonical event echoes in 5 s, mark the optimistic
-    // entry as errored. The provider's reconcileOptimistic clears the
-    // pending entry on echo, so this will only ever fire when the round-trip
-    // genuinely failed.
-    const timeout = setTimeout(() => {
-      const stillPending = events.some((e) => e.source === 'optimistic' && e.id === optimisticId);
-      if (stillPending) markOptimisticError(optimisticId, 'Server did not confirm — try again.');
-    }, 5_000);
-
     try {
       await addNoteAction(form);
+      // Action committed. Now wait for the SSE echo. If it never arrives,
+      // surface the error after 5 s. reconcileOptimistic in the provider
+      // replaces the optimistic entry on echo, making markOptimisticError
+      // a no-op.
+      setTimeout(() => {
+        markOptimisticError(optimisticId, 'Server did not confirm — try again.');
+      }, 5_000);
     } catch (err) {
       markOptimisticError(optimisticId, err instanceof Error ? err.message : 'Failed to post.');
     } finally {
-      clearTimeout(timeout);
       setPending(false);
     }
   }
@@ -1372,7 +1423,7 @@ export function Timeline(): React.JSX.Element {
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{e.markdown}</ReactMarkdown>
             </div>
           ) : (
-            <TimelineBodyView event={e} />
+            <TimelineBodyView event={e} authors={authors} />
           )}
         </li>
       ))}
@@ -1382,8 +1433,10 @@ export function Timeline(): React.JSX.Element {
 
 function TimelineBodyView({
   event,
+  authors,
 }: {
   event: Extract<DisplayedEvent, { source: 'server' }>;
+  authors: Map<string, string | null>;
 }): React.JSX.Element {
   if (event.kind === 'note') {
     const body = event.body as { markdown: string };
@@ -1416,11 +1469,13 @@ function TimelineBodyView({
     fromUserId: string | null;
     toUserId: string | null;
   };
+  const fromName =
+    event.fromUserName ?? (body.fromUserId ? lookupAuthor(authors, body.fromUserId) : 'system');
+  const toName =
+    event.toUserName ?? (body.toUserId ? lookupAuthor(authors, body.toUserId) : 'system');
   return (
-    <p className="text-sm">
-      Role <strong>{body.role}</strong>:{' '}
-      {body.fromUserId ? `was ${body.fromUserId}` : 'unassigned'} →{' '}
-      {body.toUserId ?? 'unassigned'}
+    <p className="text-neutral-700">
+      {body.role.toUpperCase()}: {fromName} → {toName}
     </p>
   );
 }
