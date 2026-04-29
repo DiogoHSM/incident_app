@@ -35,11 +35,17 @@ const RoleChangeBody = z.object({
   toUserId: z.string().uuid().nullable(),
 });
 
+const PostmortemLinkBody = z.object({
+  kind: z.literal('postmortem_link'),
+  postmortemId: z.string().uuid(),
+});
+
 export const TimelineEventBodySchema = z.discriminatedUnion('kind', [
   NoteBody,
   StatusChangeBody,
   SeverityChangeBody,
   RoleChangeBody,
+  PostmortemLinkBody,
 ]);
 
 export type TimelineEventBody = z.infer<typeof TimelineEventBodySchema>;

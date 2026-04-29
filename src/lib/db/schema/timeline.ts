@@ -7,6 +7,7 @@ export const TIMELINE_EVENT_KIND_VALUES = [
   'status_change',
   'severity_change',
   'role_change',
+  'postmortem_link',
 ] as const;
 export type TimelineEventKind = (typeof TIMELINE_EVENT_KIND_VALUES)[number];
 

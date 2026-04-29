@@ -101,4 +101,25 @@ describe('TimelineEventBodySchema', () => {
       throw new Error('expected note kind');
     }
   });
+
+  test('postmortem_link shape — postmortemId required and uuid', () => {
+    expect(
+      TimelineEventBodySchema.parse({
+        kind: 'postmortem_link',
+        postmortemId: '11111111-1111-4111-8111-111111111111',
+      }),
+    ).toMatchObject({ kind: 'postmortem_link' });
+  });
+
+  test('postmortem_link rejects non-uuid postmortemId', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({ kind: 'postmortem_link', postmortemId: 'not-a-uuid' }),
+    ).toThrow();
+  });
+
+  test('postmortem_link rejects missing postmortemId', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({ kind: 'postmortem_link' }),
+    ).toThrow();
+  });
 });
