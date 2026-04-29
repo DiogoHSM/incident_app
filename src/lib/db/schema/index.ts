@@ -5,3 +5,4 @@ export * from './services';
 export * from './runbooks';
 export * from './incidents';
 export * from './timeline';
+export * from './postmortems';
