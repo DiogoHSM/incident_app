@@ -120,19 +120,26 @@ function TimelineBodyView({
       </p>
     );
   }
-  // role_change
-  const body = event.body as {
-    role: string;
-    fromUserId: string | null;
-    toUserId: string | null;
-  };
-  const fromName =
-    event.fromUserName ?? (body.fromUserId ? lookupAuthor(authors, body.fromUserId) : 'system');
-  const toName =
-    event.toUserName ?? (body.toUserId ? lookupAuthor(authors, body.toUserId) : 'system');
+  if (event.kind === 'role_change') {
+    const body = event.body as {
+      role: string;
+      fromUserId: string | null;
+      toUserId: string | null;
+    };
+    const fromName =
+      event.fromUserName ?? (body.fromUserId ? lookupAuthor(authors, body.fromUserId) : 'system');
+    const toName =
+      event.toUserName ?? (body.toUserId ? lookupAuthor(authors, body.toUserId) : 'system');
+    return (
+      <p className="text-neutral-700">
+        {body.role.toUpperCase()}: {fromName} → {toName}
+      </p>
+    );
+  }
+  // postmortem_link
   return (
     <p className="text-neutral-700">
-      {body.role.toUpperCase()}: {fromName} → {toName}
+      Postmortem published — <a className="underline" href="./postmortem">view</a>
     </p>
   );
 }

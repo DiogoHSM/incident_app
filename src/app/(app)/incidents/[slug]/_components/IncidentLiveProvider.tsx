@@ -181,6 +181,7 @@ export function IncidentLiveProvider({
     es.addEventListener('status_change', handleEvent('status_change'));
     es.addEventListener('severity_change', handleEvent('severity_change'));
     es.addEventListener('role_change', handleEvent('role_change'));
+    es.addEventListener('postmortem_link', handleEvent('postmortem_link'));
 
     es.addEventListener('error', () => {
       setConnection('reconnecting');
