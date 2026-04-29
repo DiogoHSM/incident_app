@@ -32,7 +32,7 @@ async function backfillSinceLastEventId(
   const [anchor] = await db
     .select({ occurredAt: timelineEvents.occurredAt })
     .from(timelineEvents)
-    .where(eq(timelineEvents.id, lastEventId))
+    .where(and(eq(timelineEvents.id, lastEventId), eq(timelineEvents.incidentId, incidentId)))
     .limit(1);
   if (!anchor) return [];
   const rows = await db
@@ -78,9 +78,10 @@ export async function GET(request: Request, ctx: RouteCtx): Promise<Response> {
           for (const evt of backfill) {
             controller.enqueue(encode(formatEvent(evt)));
           }
-        } catch {
-          // If backfill fails, fall through to live mode — the client will
-          // re-fetch the canonical timeline (per spec §3.2).
+        } catch (err) {
+          // Fall through to live mode — the client will re-fetch the canonical
+          // timeline (per spec §3.2). Log so production failures are diagnosable.
+          console.warn('[sse] backfill failed for incident', incidentId, err);
         }
       }
 
