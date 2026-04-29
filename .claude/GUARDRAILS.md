@@ -2,7 +2,7 @@
 
 > **Always loaded.** "Before touching X, read Y" map — so Claude knows which context to fetch before each edit.
 
-**Last revision**: 2026-04-29 (after Plan 3 merge)
+**Last revision**: 2026-04-29 (after Plan 4 merge)
 
 ---
 
@@ -18,6 +18,7 @@ Before modifying a file that fits one of these categories, **read the correspond
 | Query layer (`src/lib/db/queries/*.ts`) | `CLAUDE.md` (boundary rules) + `src/lib/authz/index.ts` | Only place that calls Drizzle directly. Every read query that takes `userId` either calls `requireTeamMember`/`requireAdmin` or branches on `user.role === 'admin'` for admin-sees-all |
 | Incidents schema (`src/lib/db/schema/incidents.ts`), queries (`src/lib/db/queries/incidents.ts`), routes (`src/app/(app)/incidents/**`) | spec §4.1 + §5.1 + §6.3 + `2026-04-28-incidents-core.md` plan | New tables — incidents/incident_services. Slug generator in `src/lib/incidents/slug.ts` is the only place that mints public slugs (3-retry on collision in `declareIncident`). Timeline + status mutations are deferred (Plans 3/4) — don't add them ad-hoc |
 | Timeline schema (`src/lib/db/schema/timeline.ts`), queries (`src/lib/db/queries/timeline.ts`), body schemas (`src/lib/timeline/body.ts`), mutation extensions in `src/lib/db/queries/incidents.ts` (changeIncidentStatus / changeIncidentSeverity / assignIncidentRole) | spec §4.1 + §6.1 + `2026-04-29-timeline-mutations` plan | jsonb `body` MUST go through `TimelineEventBodySchema.parse(...)` before insert. Each mutation writes its `TimelineEvent` in the same `db.transaction(...)` as the row update. New event kinds (`webhook`, `postmortem_link`, `attachment`, `status_update_published`) are added in their owning plans — do not pre-add. State machine + IC-required-when-leaving-triaging is enforced in `changeIncidentStatus` and duplicated in `StatusControl.tsx` for UX gating |
+| Realtime — `src/lib/realtime/*`, `src/app/api/incidents/[slug]/stream/route.ts`, `IncidentLiveProvider.tsx`, `ConnectionBanner.tsx` | spec §3.2 + §8.1/8.2 + `2026-04-29-realtime-sse.md` plan | NOTIFY payload is the wire contract — every body field that crosses pg_notify must go through `IncidentUpdatePayloadSchema`. The dispatcher is a per-process singleton: do **not** instantiate it from app code, always go through `getRealtimeDispatcher()`. The SSE route MUST stay `runtime = 'nodejs'` (Edge can't hold LISTEN connections). Optimistic UI is **only** for notes; status / severity / role mutations stay confirmed-only per spec §8.1. The route's backfill helper validates `Last-Event-ID` is scoped to the authorized incident. |
 | Auth — `src/lib/auth/config.ts` or `src/middleware.ts` | spec §3.4 + `eslint.config.mjs` (no-restricted-imports rule) | Edge-safe boundary. **FORBIDDEN** to import `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, `node:*`. Lint will block even if you forget |
 | Auth — `src/lib/auth/index.ts`, `src/lib/auth/provision.ts` | spec §3.4 + `foundation_followups.md` | Node-side logic, does DB lookups. `provisionUserOnSignIn` is now atomic via INSERT ... ON CONFLICT — don't regress |
 | Server Actions (`src/app/**/actions.ts`) | `foundation_followups.md` (Task 10/11 error UX gap) | Current pattern `throw new Error(...)` falls through to `error.tsx`. v1.1 will migrate to `useFormState` returning `{ ok: false, errors }` |
@@ -35,7 +36,7 @@ Stop and confirm if any of these fail:
 
 - [ ] `bash ~/.claude/scripts/check-context.sh` shows no 🔴
 - [ ] If DB: recent backup; migration tested via `pnpm test` (testcontainers already verifies apply); user authorized applying in prod
-- [ ] If pushing to main: tests pass (currently 118/118); reviewer approved (per-task) or user authorized explicitly
+- [ ] If pushing to main: tests pass (currently 128/128); reviewer approved (per-task) or user authorized explicitly
 - [ ] If publishing repo / creating cloud resource: user authorized name and visibility
 
 Destructive: `rm -rf`, `DROP TABLE`, `git push --force`, `git reset --hard`, deleting published branches, amending pushed commits, deploying to production, creating public repo, deleting Postgres containers/volumes with data.

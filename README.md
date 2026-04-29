@@ -10,8 +10,10 @@ Next.js 16 · TypeScript (strict + `noUncheckedIndexedAccess`) · Tailwind v4 ·
 
 - Plan 1 (Foundation): SSO sign-in (Google OIDC), org admin allowlist, teams + memberships, services, severity-keyed runbooks editor, sidebar shell.
 - Plan 2 (Incidents core): declare an incident with severity + summary + affected services; chip-filtered list view with admin-sees-all parity; per-incident detail page showing header, summary, affected services, and severity-keyed runbooks.
+- Plan 3 (Timeline + mutations): live timeline of notes / status / severity / role events, state-machine-guarded status transitions with IC-required-when-leaving-triaging, role pickers (IC / Scribe / Comms), markdown rendering on notes.
+- Plan 4 (Real-time SSE): timeline updates broadcast across browser tabs within ~1 s via Postgres `LISTEN/NOTIFY` + a Node-runtime SSE route; optimistic notes (replaced on echo, marked errored after 5 s); yellow "Reconnecting…" banner after 30 s of silence.
 
-Coming next (per spec §11): live timeline + SSE (Plan 3), role mutations and status/severity transitions including "Mark resolved" (Plan 4), postmortems (Plan 5), webhook ingestion (Plan 6), public status page (Plan 7), metrics dashboard (Plan 8).
+Coming next (per spec §11): postmortems (Plan 5), webhook ingestion (Plan 6), public status page (Plan 7), metrics dashboard (Plan 8).
 
 ## Local setup
 
@@ -39,7 +41,7 @@ pnpm dev           # http://localhost:3000
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # eslint .
 pnpm format:check  # prettier --check .
-pnpm test          # vitest run (55 tests, ~5s with one shared testcontainer)
+pnpm test          # vitest run (128 tests, ~7s with one shared testcontainer)
 pnpm build         # next build
 ```
 
@@ -86,12 +88,16 @@ After running `pnpm dev` against a real Google OAuth client:
 - Plan 3: starting in triaging without an IC, attempt → investigating — IC picker appears; selecting one works, submitting without one fails.
 - Plan 3: change severity — appears as a `severity_change` event.
 - Plan 3: assign IC / Scribe / Comms via the Roles section — column updates and `role_change` event appears.
+- Plan 4: open the same incident in two browser windows; post a note in one — within ~1 s the note appears in the other without a manual refresh.
+- Plan 4: in the second window, observe the network tab — `/api/incidents/<slug>/stream` stays open and emits an `event: heartbeat` line every 25 s.
+- Plan 4: with the incident open, change a status / severity / role in one tab — the other tab's timeline grows the corresponding event live.
+- Plan 4: stop the Postgres container (`docker compose stop postgres`) — within 30 s a yellow "Reconnecting…" banner appears in both tabs. Bring the DB back (`docker compose start postgres`) — banner clears once the EventSource reconnects.
 
 If any step fails, see `.claude/memory/foundation_followups.md` for known v1.1 issues.
 
 ## Deferred follow-ups
 
-A number of code-review issues were intentionally deferred to a v1.1 cleanup pass. They're tracked in `.claude/memory/foundation_followups.md`. The three Plan 2 prereqs flagged by the Plan 1 reviewer (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` race) are now resolved in Plan 2; remaining items include:
+A number of code-review issues were intentionally deferred to a v1.1 cleanup pass. They're tracked in `.claude/memory/foundation_followups.md`. The three Plan 2 prereqs flagged by the Plan 1 reviewer (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` race) are now resolved in Plan 2; remaining items include: Plan 4 added its own follow-ups (route-handler tests, viewer count widget, retry button on errored optimistic notes) — see `.claude/memory/foundation_followups.md` for the full list.
 
 - End-to-end auth chain test
 - N+1 user lookups in settings page

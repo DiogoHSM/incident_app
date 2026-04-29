@@ -58,3 +58,21 @@ Items flagged during Plan 3 final code review and intentionally deferred:
 4. **`changeIncidentStatus` writes the IC `role_change` event before the `status_change` event** when both fire in the same call, but `occurredAt = now()` resolves both inserts to the same timestamp. List query ORDER BY `occurredAt DESC` may return them in ID order, not insertion order — surprise the user reading the timeline. Optional fix: bump the role_change `occurredAt` by 1ms earlier, or accept and document.
 
 5. **`appendNote` parses body before authz**, leaking a parse error to outsiders posting an empty note. Negligible information leak. Conventional pattern is authz-first. Reorder if v1.1 audit cares.
+
+## Plan 4 follow-ups
+
+Items flagged during Plan 4 code reviews and intentionally deferred:
+
+1. **Route-handler test for `/api/incidents/[slug]/stream`.** No automated test for SSE framing, heartbeat, abort cleanup, or `Last-Event-ID` backfill. The dispatcher round-trip in `tests/integration/realtime-dispatcher.test.ts` covers the data path; the route is a thin wrapper. Defer to Plan 11 (Playwright e2e).
+
+2. **Viewer count widget on the war-room (🟢 Live · N viewers).** Spec §6.1 mentions it; not in Plan 4 scope. Plan 11 polish.
+
+3. **Retry button on errored optimistic notes.** Spec §8.1 mentions "mark `error` with retry"; Plan 4 only marks the error and clears the textarea (the user can copy markdown back from the errored entry but there's no one-click retry). Add when the failure mode is observed in practice.
+
+4. **Stronger optimistic-note dedup than markdown match.** Current reconciliation in `IncidentLiveProvider.reconcileOptimistic` matches by `body.markdown === optimistic.markdown`. If two users post identical text simultaneously, the wrong optimistic entry can be replaced. Fix is a client-generated correlation token threaded through `addNoteAction` and the NOTIFY payload. Skip until the failure is observed.
+
+5. **Edge-cached status page invalidation via the same `incident_updates` channel.** Plan 9 (status page) will subscribe to the same channel for ISR cache busting.
+
+6. **`relativeTime` ticks once per render, not on a timer.** A note posted 30 s ago will keep saying "just now" until something else triggers a re-render of `Timeline`. With SSE/heartbeat traffic re-rendering happens implicitly within tens of seconds, but a quiet incident could go stale-looking. Optional: add a 30 s interval that bumps a render token. Defer until the UX gap is observed.
+
+7. **Live `role_change` events do a follow-up SELECT per event in the dispatcher** to resolve `fromUserName` / `toUserName`. For an incident with rapid role churn this is a small extra DB round-trip per event. The route's backfill helper batches the lookup; the dispatcher's per-event path could be batched too with a tiny in-process micro-buffer. Skip until rapid-role-churn shows up.
