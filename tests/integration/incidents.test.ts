@@ -250,3 +250,47 @@ describe('listIncidentsForUser', () => {
     expect(list).toEqual([]);
   });
 });
+
+describe('findIncidentBySlugForUser', () => {
+  let world: World;
+  let aSlug: string;
+
+  beforeEach(async () => {
+    world = await seed();
+    const a = await declareIncident(getTestDb(), world.memberAId, {
+      teamId: world.teamAId,
+      title: 'detail-a',
+      summary: 'sum',
+      severity: 'SEV2',
+      affectedServiceIds: [world.serviceA1Id],
+    });
+    aSlug = a.publicSlug;
+  });
+
+  test('team member sees their own team incident with affected services', async () => {
+    const found = await findIncidentBySlugForUser(getTestDb(), world.memberAId, aSlug);
+    expect(found).not.toBeNull();
+    expect(found!.incident.title).toBe('detail-a');
+    expect(found!.affectedServices.map((s) => s.slug)).toEqual(['a1']);
+  });
+
+  test('admin sees any incident', async () => {
+    const found = await findIncidentBySlugForUser(getTestDb(), world.adminId, aSlug);
+    expect(found?.incident.title).toBe('detail-a');
+  });
+
+  test('outsider cannot see', async () => {
+    const found = await findIncidentBySlugForUser(getTestDb(), world.outsiderId, aSlug);
+    expect(found).toBeNull();
+  });
+
+  test('member of another team cannot see', async () => {
+    const found = await findIncidentBySlugForUser(getTestDb(), world.memberBId, aSlug);
+    expect(found).toBeNull();
+  });
+
+  test('unknown slug returns null', async () => {
+    const found = await findIncidentBySlugForUser(getTestDb(), world.adminId, 'inc-zzzzzzzz');
+    expect(found).toBeNull();
+  });
+});

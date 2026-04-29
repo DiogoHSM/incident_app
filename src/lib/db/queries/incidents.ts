@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, gte, inArray } from 'drizzle-orm';
 import { type DB } from '@/lib/db/client';
 import {
   incidents,
@@ -6,7 +6,7 @@ import {
   type Incident,
   type IncidentStatus,
 } from '@/lib/db/schema/incidents';
-import { services, type Severity } from '@/lib/db/schema/services';
+import { services, type Severity, type Service } from '@/lib/db/schema/services';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { findUserById } from '@/lib/db/queries/users';
 import { requireTeamMember, ForbiddenError } from '@/lib/authz';
@@ -142,7 +142,45 @@ export async function listIncidentsForUser(
     .orderBy(desc(incidents.declaredAt));
 }
 
-// Implemented in Task 6.
-export async function findIncidentBySlugForUser(): Promise<never> {
-  throw new Error('Not implemented yet — see Task 6');
+export interface IncidentDetail {
+  incident: Incident;
+  affectedServices: Service[];
+}
+
+export async function findIncidentBySlugForUser(
+  db: DB,
+  userId: string,
+  slug: string,
+): Promise<IncidentDetail | null> {
+  const user = await findUserById(db, userId);
+  if (!user) return null;
+
+  const [incident] = await db
+    .select()
+    .from(incidents)
+    .where(eq(incidents.publicSlug, slug))
+    .limit(1);
+  if (!incident) return null;
+
+  if (user.role !== 'admin') {
+    const isMember =
+      (
+        await db
+          .select({ teamId: teamMemberships.teamId })
+          .from(teamMemberships)
+          .where(
+            and(eq(teamMemberships.userId, userId), eq(teamMemberships.teamId, incident.teamId)),
+          )
+          .limit(1)
+      ).length > 0;
+    if (!isMember) return null;
+  }
+
+  const affectedServices = await db
+    .select(getTableColumns(services))
+    .from(incidentServices)
+    .innerJoin(services, eq(incidentServices.serviceId, services.id))
+    .where(eq(incidentServices.incidentId, incident.id));
+
+  return { incident, affectedServices };
 }
