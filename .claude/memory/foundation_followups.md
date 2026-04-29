@@ -78,3 +78,31 @@ Items flagged during Plan 4 code reviews and intentionally deferred:
 7. **Live `role_change` events do a follow-up SELECT per event in the dispatcher** to resolve `fromUserName` / `toUserName`. For an incident with rapid role churn this is a small extra DB round-trip per event. The route's backfill helper batches the lookup; the dispatcher's per-event path could be batched too with a tiny in-process micro-buffer. Skip until rapid-role-churn shows up.
 
 8. **Dispatcher LISTEN drop without SSE drop is invisible to clients.** `postgres-js` v3's `client.listen(...)` auto-reconnects, but during the reconnect window any NOTIFY fired by mutations is lost. Clients won't see those events and the 30 s liveness ticker won't trip because heartbeats are generated client-side. In practice the LISTEN drop usually propagates to the SSE stream (Postgres tears down the connection), triggering the existing reconnect path. A defense-in-depth fix: have the dispatcher detect its own LISTEN reconnect and force-close every active SSE stream so `Last-Event-ID` backfill picks up the gap. Skip until the gap is observed.
+
+## Plan 5 follow-ups
+
+Items flagged during Plan 5 final code review (post-merge) and intentionally deferred:
+
+1. **Redundant DB roundtrip on every war-room render.** `PostmortemTrigger` calls `findPostmortemForIncidentSlug` even though the war-room page already authorized via `findIncidentBySlugForUser` and has `incident.id` + `incident.teamId` in scope. Three extra queries per page render. Fix: pass `incidentId` (and a pre-fetched `postmortem | null`) into `PostmortemTrigger` from the page, or add a `findPostmortemByIncidentId` (assumes-already-authorized) variant. Locations: `src/app/(app)/incidents/[slug]/page.tsx:148`, `src/app/(app)/incidents/[slug]/_components/PostmortemTrigger.tsx:14`.
+
+2. **Autosave can lose data when the tab closes during an inflight save.** The `beforeunload` handler in `PostmortemEditor` only re-fires the save if a debounce timer is pending. If the timer already fired and the fetch is mid-flight when the user closes the tab, the inflight fetch was issued without `keepalive: true` and may be aborted. Fix: track an `isDirty` flag (compare current body to last-saved markdown) and always issue a `keepalive`/`navigator.sendBeacon` flush on `beforeunload` when dirty, regardless of timer state. Location: `src/app/(app)/incidents/[slug]/postmortem/_components/PostmortemEditor.tsx:95-110`.
+
+3. **Server Action defense-in-depth inconsistency.** 4 of 6 actions call `findPostmortemByIdForUser` upfront before delegating to the query; `updateActionItemAction` and `deleteActionItemAction` skip it. Internal `requireTeamMember` inside the queries still enforces authz, so this is not a vulnerability — just inconsistent. Either add a `findActionItemByIdForUser` finder for symmetry or remove the upfront finder from the other actions to match. Location: `src/app/(app)/incidents/[slug]/postmortem/actions.ts:103-123`.
+
+4. **Repeated team-membership read pattern.** `findPostmortemByIdForUser`, `findPostmortemForIncidentSlug`, and `listActionItemsForPostmortem` each duplicate the `if (user.role !== 'admin') { ... select teamMemberships limit 1 ... }` block — same pattern lives in incidents/services queries too. A `userCanAccessTeam(db, user, teamId)` helper would dedupe ~8 copies. Pre-existing pattern, not a Plan 5 regression.
+
+5. **`tx as unknown as DB` cast pattern.** Visible in `incidents.ts`, `postmortems.ts`, and any future transactional query module. The clean fix is a typed alias `Queryable = DB | PgTransaction<...>` and changing `requireTeamMember`, `findUserById`, `loadIncidentOrThrow`, `notifyIncidentUpdate` to accept it. Cross-cutting refactor; defer to v1.1.
+
+6. **`TimelineBodyView` `postmortem_link` branch is implicit fallthrough.** `Timeline.tsx:142-150` has a comment but no `if (event.kind === 'postmortem_link')` guard. If a sixth kind is added later (e.g. `attachment`) without updating this view, it will silently render as "Postmortem published". Add the explicit guard + an exhaustive `assertNever` to make the next kind addition a compile error.
+
+7. **`useParams` called inside the per-event render.** `Timeline.tsx:100` reads it inside `TimelineBodyView`. Cheap, but reading the slug once at the top of `Timeline()` and passing it as a prop would be cleaner.
+
+8. **No tests for `POST /api/postmortems/[id]`.** Same gap as `/api/incidents/[slug]/stream` (Plan 4 #1). Defer to Plan 11 (Playwright e2e).
+
+9. **No E2E test for publish→pg_notify→SSE→client render.** Each layer is tested in isolation but not end-to-end. Adding a `postmortem_link` round-trip alongside the existing dispatcher round-trip test (`tests/integration/realtime-dispatcher.test.ts`) would be a small addition.
+
+10. **Resolved-required-before-publish guard not enforced.** Spec doesn't require it; not enforced. Add later if a real user publishes a postmortem on a still-open incident and regrets it.
+
+11. **Action item `external_url` validation only at action layer.** `createActionItem`/`updateActionItem` accept any string for `externalUrl`. Action-layer zod parse gates it at the UI boundary. A future seed script or admin tool calling the queries directly would need to validate URLs itself.
+
+12. **Postmortem visibility on /status page.** Plan 5 stores the `public_on_status_page` flag; Plan 7 (status page) consumes it.
