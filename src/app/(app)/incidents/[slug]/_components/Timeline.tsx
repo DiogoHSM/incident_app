@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useIncidentLive, type DisplayedEvent } from './IncidentLiveProvider';
@@ -95,6 +97,7 @@ function TimelineBodyView({
   event: Extract<DisplayedEvent, { source: 'server' }>;
   authors: Map<string, string | null>;
 }): React.JSX.Element {
+  const params = useParams<{ slug: string }>();
   if (event.kind === 'note') {
     const body = event.body as { markdown: string };
     return (
@@ -139,7 +142,10 @@ function TimelineBodyView({
   // postmortem_link
   return (
     <p className="text-neutral-700">
-      Postmortem published — <a className="underline" href="./postmortem">view</a>
+      Postmortem published —{' '}
+      <Link className="underline" href={`/incidents/${params.slug}/postmortem`}>
+        view
+      </Link>
     </p>
   );
 }
