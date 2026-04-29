@@ -71,7 +71,7 @@ export function IncidentLiveProvider({
     () => new Map(initialAuthors.map((a) => [a.id, a.name])),
   );
   const [connection, setConnection] = useState<ConnectionState>('connecting');
-  const lastMessageAtRef = useRef<number>(Date.now());
+  const lastMessageAtRef = useRef<number>(0);
 
   const upsertEvent = useCallback((evt: TimelineEventOnWire) => {
     setEvents((prev) => {
@@ -148,8 +148,8 @@ export function IncidentLiveProvider({
 
   // EventSource subscription.
   useEffect(() => {
+    lastMessageAtRef.current = Date.now();
     const es = new EventSource(`/api/incidents/${slug}/stream`);
-    setConnection('connecting');
 
     const onAnyMessage = () => {
       lastMessageAtRef.current = Date.now();
