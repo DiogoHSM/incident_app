@@ -52,7 +52,7 @@ describe('TimelineEventBodySchema', () => {
         kind: 'role_change',
         role: 'ic',
         fromUserId: null,
-        toUserId: '00000000-0000-0000-0000-000000000001',
+        toUserId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
       }),
     ).toMatchObject({ kind: 'role_change', role: 'ic' });
   });

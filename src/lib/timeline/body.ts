@@ -30,8 +30,8 @@ const SeverityChangeBody = z.object({
 const RoleChangeBody = z.object({
   kind: z.literal('role_change'),
   role: z.enum(ROLE_VALUES),
-  fromUserId: z.string().guid().nullable(),
-  toUserId: z.string().guid().nullable(),
+  fromUserId: z.string().uuid().nullable(),
+  toUserId: z.string().uuid().nullable(),
 });
 
 export const TimelineEventBodySchema = z.discriminatedUnion('kind', [
