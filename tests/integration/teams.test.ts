@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, test } from 'vitest';
 import { teams } from '@/lib/db/schema/teams';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { users } from '@/lib/db/schema/users';
@@ -9,6 +9,7 @@ import {
   addMembershipAsAdmin,
   removeMembershipAsAdmin,
 } from '@/lib/db/queries/teams-admin';
+import { listTeamMembersWithUsers } from '@/lib/db/queries/teams';
 import { ForbiddenError } from '@/lib/authz';
 
 describe('teams + memberships', () => {
@@ -103,5 +104,35 @@ describe('teams + memberships', () => {
     await removeMembershipAsAdmin(db, admin!.id, { teamId: team!.id, userId: u!.id });
     const after2 = await db.select().from(teamMemberships);
     expect(after2).toHaveLength(0);
+  });
+});
+
+describe('listTeamMembersWithUsers', () => {
+  useTestDb();
+
+  test('returns alphabetized members of the given team only', async () => {
+    const db = getTestDb();
+    const [t1] = await db.insert(teams).values({ name: 'T1', slug: 't1' }).returning();
+    const [t2] = await db.insert(teams).values({ name: 'T2', slug: 't2' }).returning();
+    const [u1] = await db
+      .insert(users)
+      .values({ email: 'b@x.co', name: 'Bob', ssoSubject: 's|b' })
+      .returning();
+    const [u2] = await db
+      .insert(users)
+      .values({ email: 'a@x.co', name: 'Alice', ssoSubject: 's|a' })
+      .returning();
+    const [u3] = await db
+      .insert(users)
+      .values({ email: 'c@x.co', name: 'Carla', ssoSubject: 's|c' })
+      .returning();
+    await db.insert(teamMemberships).values([
+      { userId: u1!.id, teamId: t1!.id, role: 'member' },
+      { userId: u2!.id, teamId: t1!.id, role: 'member' },
+      { userId: u3!.id, teamId: t2!.id, role: 'member' },
+    ]);
+
+    const list = await listTeamMembersWithUsers(db, t1!.id);
+    expect(list.map((m) => m.name)).toEqual(['Alice', 'Bob']);
   });
 });
