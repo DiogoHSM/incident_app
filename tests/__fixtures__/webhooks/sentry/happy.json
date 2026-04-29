@@ -1,0 +1,13 @@
+{
+  "action": "created",
+  "data": {
+    "issue": {
+      "id": "abc123def456",
+      "title": "TypeError: Cannot read properties of undefined (reading 'id')",
+      "level": "error",
+      "permalink": "https://sentry.io/organizations/acme/issues/abc123def456/",
+      "project": { "slug": "api-server" },
+      "metadata": { "value": "Cannot read properties of undefined (reading 'id')" }
+    }
+  }
+}
