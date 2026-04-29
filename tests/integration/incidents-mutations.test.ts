@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { useTestDb, getTestDb } from '../setup/db';
 import { users } from '@/lib/db/schema/users';
 import { teams } from '@/lib/db/schema/teams';
@@ -11,6 +11,7 @@ import {
   declareIncident,
   changeIncidentStatus,
   changeIncidentSeverity,
+  assignIncidentRole,
   IncidentStateMachineError,
 } from '@/lib/db/queries/incidents';
 
@@ -339,5 +340,119 @@ describe('changeIncidentSeverity', () => {
       'SEV4',
     );
     expect(result!.incident.severity).toBe('SEV4');
+  });
+});
+
+describe('assignIncidentRole', () => {
+  useTestDb();
+  let world: World;
+  beforeEach(async () => {
+    world = await seed();
+  });
+
+  for (const role of ['ic', 'scribe', 'comms'] as const) {
+    test(`assigning ${role} writes role_change event and updates the column`, async () => {
+      const db = getTestDb();
+      const result = await assignIncidentRole(
+        db,
+        world.memberAId,
+        world.investigatingId,
+        role,
+        world.memberA2Id,
+      );
+      expect(result).not.toBeNull();
+      const column = ({ ic: 'icUserId', scribe: 'scribeUserId', comms: 'commsUserId' } as const)[
+        role
+      ];
+      expect(result!.incident[column]).toBe(world.memberA2Id);
+
+      const events = await db
+        .select()
+        .from(timelineEvents)
+        .where(
+          and(
+            eq(timelineEvents.incidentId, world.investigatingId),
+            eq(timelineEvents.kind, 'role_change'),
+          ),
+        );
+      expect(events).toHaveLength(1);
+      expect(events[0]!.body).toMatchObject({
+        kind: 'role_change',
+        role,
+        toUserId: world.memberA2Id,
+      });
+    });
+  }
+
+  test('unassigning (toUserId = null) is allowed and writes an event', async () => {
+    const db = getTestDb();
+    await assignIncidentRole(db, world.memberAId, world.investigatingId, 'ic', world.memberA2Id);
+    const result = await assignIncidentRole(
+      db,
+      world.memberAId,
+      world.investigatingId,
+      'ic',
+      null,
+    );
+    expect(result!.incident.icUserId).toBeNull();
+    const events = await db
+      .select()
+      .from(timelineEvents)
+      .where(
+        and(
+          eq(timelineEvents.incidentId, world.investigatingId),
+          eq(timelineEvents.kind, 'role_change'),
+        ),
+      );
+    expect(events).toHaveLength(2);
+  });
+
+  test('assigning the same user is a no-op', async () => {
+    const db = getTestDb();
+    await assignIncidentRole(db, world.memberAId, world.investigatingId, 'ic', world.memberA2Id);
+    const result = await assignIncidentRole(
+      db,
+      world.memberAId,
+      world.investigatingId,
+      'ic',
+      world.memberA2Id,
+    );
+    expect(result).toBeNull();
+  });
+
+  test('assigning a non-team-member is rejected', async () => {
+    await expect(
+      assignIncidentRole(
+        getTestDb(),
+        world.memberAId,
+        world.investigatingId,
+        'scribe',
+        world.outsiderId,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  test('assigning an admin (who is not on the team) is allowed because admins pass requireTeamMember', async () => {
+    const db = getTestDb();
+    const result = await assignIncidentRole(
+      db,
+      world.memberAId,
+      world.investigatingId,
+      'comms',
+      world.adminId,
+    );
+    expect(result!.incident.commsUserId).toBe(world.adminId);
+  });
+
+  test('outsider actor rejected', async () => {
+    await expect(
+      assignIncidentRole(
+        getTestDb(),
+        world.outsiderId,
+        world.investigatingId,
+        'ic',
+        world.memberAId,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 });

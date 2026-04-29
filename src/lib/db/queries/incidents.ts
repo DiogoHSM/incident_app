@@ -297,6 +297,66 @@ export async function changeIncidentStatus(
   });
 }
 
+const ROLE_COLUMN: Record<IncidentRole, 'icUserId' | 'scribeUserId' | 'commsUserId'> = {
+  ic: 'icUserId',
+  scribe: 'scribeUserId',
+  comms: 'commsUserId',
+};
+
+export async function assignIncidentRole(
+  db: DB,
+  actorUserId: string,
+  incidentId: string,
+  role: IncidentRole,
+  toUserId: string | null,
+): Promise<{ incident: Incident; event: typeof timelineEvents.$inferSelect } | null> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, incidentId))
+      .limit(1);
+    if (!current) throw new Error('Incident not found');
+
+    await requireTeamMember(tx as unknown as DB, actorUserId, current.teamId);
+
+    const column = ROLE_COLUMN[role];
+    const fromUserId = current[column];
+
+    if (fromUserId === toUserId) return null;
+
+    if (toUserId !== null) {
+      await requireTeamMember(tx as unknown as DB, toUserId, current.teamId);
+    }
+
+    const [updated] = await tx
+      .update(incidents)
+      .set({ [column]: toUserId, updatedAt: new Date() })
+      .where(eq(incidents.id, incidentId))
+      .returning();
+    if (!updated) throw new Error('Update returned no rows');
+
+    const body = TimelineEventBodySchema.parse({
+      kind: 'role_change',
+      role,
+      fromUserId,
+      toUserId,
+    });
+    const [event] = await tx
+      .insert(timelineEvents)
+      .values({
+        incidentId,
+        authorUserId: actorUserId,
+        kind: 'role_change',
+        body,
+      })
+      .returning();
+    if (!event) throw new Error('Insert returned no rows');
+
+    return { incident: updated, event };
+  });
+}
+
 export async function changeIncidentSeverity(
   db: DB,
   actorUserId: string,
