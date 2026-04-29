@@ -89,6 +89,7 @@ export async function GET(request: Request, ctx: RouteCtx): Promise<Response> {
   const lastEventId = request.headers.get('last-event-id');
 
   const dispatcher = getRealtimeDispatcher();
+  await dispatcher.whenReady();
   let unsubscribe: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
 
