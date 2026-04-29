@@ -1,11 +1,20 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { inArray } from 'drizzle-orm';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { findIncidentBySlugForUser } from '@/lib/db/queries/incidents';
 import { getRunbook } from '@/lib/db/queries/runbooks';
+import { listTeamMembersWithUsers } from '@/lib/db/queries/teams';
+import { listTimelineEventsForIncident } from '@/lib/db/queries/timeline';
+import { users } from '@/lib/db/schema/users';
 import { SeverityPill } from '../_components/SeverityPill';
 import { StatusPill } from '../_components/StatusPill';
+import { Timeline } from './_components/Timeline';
+import { NoteForm } from './_components/NoteForm';
+import { StatusControl } from './_components/StatusControl';
+import { SeverityControl } from './_components/SeverityControl';
+import { RolePickers } from './_components/RolePickers';
 
 function durationLabel(start: Date, end: Date | null): string {
   const ms = (end ?? new Date()).getTime() - start.getTime();
@@ -30,18 +39,46 @@ export default async function IncidentDetailPage({
   const found = await findIncidentBySlugForUser(db, session.user.id, slug);
   if (!found) notFound();
   const { incident, affectedServices } = found;
-
   const userId = session.user.id;
-  const runbooks = await Promise.all(
-    affectedServices.map(async (svc) => {
-      try {
-        const rb = await getRunbook(db, userId, svc.id, incident.severity);
-        return { service: svc, runbook: rb };
-      } catch {
-        return { service: svc, runbook: null };
-      }
-    }),
-  );
+
+  const [runbooks, events, teamMembers] = await Promise.all([
+    Promise.all(
+      affectedServices.map(async (svc) => {
+        try {
+          const rb = await getRunbook(db, userId, svc.id, incident.severity);
+          return { service: svc, runbook: rb };
+        } catch {
+          return { service: svc, runbook: null };
+        }
+      }),
+    ),
+    listTimelineEventsForIncident(db, userId, incident.id),
+    listTeamMembersWithUsers(db, incident.teamId),
+  ]);
+
+  // Resolve author names for events. Includes role_change.fromUserId/toUserId targets.
+  const involvedUserIds = new Set<string>();
+  for (const ev of events) {
+    if (ev.authorUserId) involvedUserIds.add(ev.authorUserId);
+    if (ev.kind === 'role_change') {
+      const body = ev.body as { fromUserId: string | null; toUserId: string | null };
+      if (body.fromUserId) involvedUserIds.add(body.fromUserId);
+      if (body.toUserId) involvedUserIds.add(body.toUserId);
+    }
+  }
+  for (const m of teamMembers) involvedUserIds.add(m.id);
+  for (const id of [incident.icUserId, incident.scribeUserId, incident.commsUserId]) {
+    if (id) involvedUserIds.add(id);
+  }
+
+  const authorRows =
+    involvedUserIds.size > 0
+      ? await db
+          .select({ id: users.id, name: users.name })
+          .from(users)
+          .where(inArray(users.id, [...involvedUserIds]))
+      : [];
+  const authorMap = new Map(authorRows.map((r) => [r.id, r.name]));
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -66,15 +103,40 @@ export default async function IncidentDetailPage({
           </section>
         )}
 
-        <section className="rounded border border-neutral-200 bg-white p-4">
-          <h2 className="mb-2 text-sm font-medium text-neutral-700">Timeline</h2>
-          <p className="text-sm text-neutral-500">
-            Live timeline lands in Plan 3 — no events yet for this incident.
-          </p>
+        <section className="space-y-3 rounded border border-neutral-200 bg-white p-4">
+          <h2 className="text-sm font-medium text-neutral-700">Timeline</h2>
+          <NoteForm slug={incident.publicSlug} />
+          <Timeline events={events} authors={authorMap} />
         </section>
       </div>
 
       <aside className="space-y-4">
+        <section className="rounded border border-neutral-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-medium text-neutral-700">Quick actions</h2>
+          <div className="space-y-3">
+            <StatusControl
+              slug={incident.publicSlug}
+              current={incident.status}
+              hasIc={incident.icUserId !== null}
+              teamMembers={teamMembers.map((m) => ({ id: m.id, name: m.name }))}
+            />
+            <SeverityControl slug={incident.publicSlug} current={incident.severity} />
+          </div>
+        </section>
+
+        <section className="rounded border border-neutral-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-medium text-neutral-700">Roles</h2>
+          <RolePickers
+            slug={incident.publicSlug}
+            assignments={{
+              ic: incident.icUserId,
+              scribe: incident.scribeUserId,
+              comms: incident.commsUserId,
+            }}
+            teamMembers={teamMembers.map((m) => ({ id: m.id, name: m.name }))}
+          />
+        </section>
+
         <section className="rounded border border-neutral-200 bg-white p-4">
           <h2 className="mb-2 text-sm font-medium text-neutral-700">Affected services</h2>
           {affectedServices.length === 0 ? (
