@@ -118,3 +118,98 @@ describe('appendNote', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('listTimelineEventsForIncident', () => {
+  useTestDb();
+  let world: World;
+  let firstAt: Date;
+  let secondAt: Date;
+  let thirdAt: Date;
+
+  beforeEach(async () => {
+    world = await seed();
+    const db = getTestDb();
+    firstAt = new Date(Date.now() - 1000 * 60 * 30);
+    secondAt = new Date(Date.now() - 1000 * 60 * 15);
+    thirdAt = new Date();
+    await db.insert(timelineEvents).values([
+      {
+        incidentId: world.incidentAId,
+        authorUserId: world.memberAId,
+        kind: 'note',
+        body: { kind: 'note', markdown: 'first' },
+        occurredAt: firstAt,
+      },
+      {
+        incidentId: world.incidentAId,
+        authorUserId: world.memberAId,
+        kind: 'note',
+        body: { kind: 'note', markdown: 'second' },
+        occurredAt: secondAt,
+      },
+      {
+        incidentId: world.incidentAId,
+        authorUserId: world.memberAId,
+        kind: 'note',
+        body: { kind: 'note', markdown: 'third' },
+        occurredAt: thirdAt,
+      },
+    ]);
+  });
+
+  test('returns events newest-first', async () => {
+    const events = await listTimelineEventsForIncident(
+      getTestDb(),
+      world.memberAId,
+      world.incidentAId,
+    );
+    expect(events.map((e) => (e.body as { markdown: string }).markdown)).toEqual([
+      'third',
+      'second',
+      'first',
+    ]);
+  });
+
+  test('admin sees all without team membership', async () => {
+    const events = await listTimelineEventsForIncident(
+      getTestDb(),
+      world.adminId,
+      world.incidentAId,
+    );
+    expect(events).toHaveLength(3);
+  });
+
+  test('outsider denied', async () => {
+    await expect(
+      listTimelineEventsForIncident(getTestDb(), world.outsiderId, world.incidentAId),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  test('member of another team denied', async () => {
+    await expect(
+      listTimelineEventsForIncident(getTestDb(), world.memberBId, world.incidentAId),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  test('limit caps the result count', async () => {
+    const events = await listTimelineEventsForIncident(
+      getTestDb(),
+      world.memberAId,
+      world.incidentAId,
+      { limit: 2 },
+    );
+    expect(events).toHaveLength(2);
+    expect((events[0]!.body as { markdown: string }).markdown).toBe('third');
+    expect((events[1]!.body as { markdown: string }).markdown).toBe('second');
+  });
+
+  test('before cursor returns older events only', async () => {
+    const events = await listTimelineEventsForIncident(
+      getTestDb(),
+      world.memberAId,
+      world.incidentAId,
+      { before: secondAt },
+    );
+    expect(events.map((e) => (e.body as { markdown: string }).markdown)).toEqual(['first']);
+  });
+});
