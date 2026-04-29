@@ -45,3 +45,4 @@ next-env.d.ts
 # project-specific
 .claude/docs/SECRETS.md
 .superpowers/
+.worktrees/
