@@ -13,8 +13,6 @@ import {
   findIncidentBySlugForUser,
 } from '@/lib/db/queries/incidents';
 
-useTestDb();
-
 interface World {
   adminId: string;
   memberAId: string;
@@ -71,6 +69,7 @@ async function seed(): Promise<World> {
 }
 
 describe('declareIncident', () => {
+  useTestDb();
   let world: World;
   beforeEach(async () => {
     world = await seed();
@@ -172,6 +171,7 @@ describe('declareIncident', () => {
 });
 
 describe('listIncidentsForUser', () => {
+  useTestDb();
   let world: World;
   beforeEach(async () => {
     world = await seed();
@@ -252,6 +252,7 @@ describe('listIncidentsForUser', () => {
 });
 
 describe('findIncidentBySlugForUser', () => {
+  useTestDb();
   let world: World;
   let aSlug: string;
 
