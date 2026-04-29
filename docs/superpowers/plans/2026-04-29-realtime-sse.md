@@ -1528,6 +1528,8 @@ EOF
 )"
 ```
 
+> **Implementation note:** Tasks 8 and 9 were committed together because the NoteForm/Timeline refactor invalidates the page.tsx call sites — the working tree only typechecks when both halves land at once. The combined commit message references both task scopes.
+
 ---
 
 ## Task 10: Docs, guardrails, follow-ups

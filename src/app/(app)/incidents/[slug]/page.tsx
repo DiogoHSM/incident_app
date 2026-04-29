@@ -10,6 +10,8 @@ import { listTimelineEventsForIncident } from '@/lib/db/queries/timeline';
 import { users } from '@/lib/db/schema/users';
 import { SeverityPill } from '../_components/SeverityPill';
 import { StatusPill } from '../_components/StatusPill';
+import { IncidentLiveProvider } from './_components/IncidentLiveProvider';
+import { ConnectionBanner } from './_components/ConnectionBanner';
 import { Timeline } from './_components/Timeline';
 import { NoteForm } from './_components/NoteForm';
 import { StatusControl } from './_components/StatusControl';
@@ -41,7 +43,7 @@ export default async function IncidentDetailPage({
   const { incident, affectedServices } = found;
   const userId = session.user.id;
 
-  const [runbooks, events, teamMembers] = await Promise.all([
+  const [runbooks, teamMembers, events] = await Promise.all([
     Promise.all(
       affectedServices.map(async (svc) => {
         try {
@@ -52,33 +54,17 @@ export default async function IncidentDetailPage({
         }
       }),
     ),
-    listTimelineEventsForIncident(db, userId, incident.id),
     listTeamMembersWithUsers(db, incident.teamId),
+    listTimelineEventsForIncident(db, userId, incident.id),
   ]);
 
-  // Resolve author names for events. Includes role_change.fromUserId/toUserId targets.
-  const involvedUserIds = new Set<string>();
-  for (const ev of events) {
-    if (ev.authorUserId) involvedUserIds.add(ev.authorUserId);
-    if (ev.kind === 'role_change') {
-      const body = ev.body as { fromUserId: string | null; toUserId: string | null };
-      if (body.fromUserId) involvedUserIds.add(body.fromUserId);
-      if (body.toUserId) involvedUserIds.add(body.toUserId);
-    }
-  }
-  for (const m of teamMembers) involvedUserIds.add(m.id);
-  for (const id of [incident.icUserId, incident.scribeUserId, incident.commsUserId]) {
-    if (id) involvedUserIds.add(id);
-  }
-
+  // Resolve author names for all timeline event authors.
+  const authorIds = [...new Set(events.map((e) => e.authorUserId).filter((id): id is string => id !== null))];
   const authorRows =
-    involvedUserIds.size > 0
-      ? await db
-          .select({ id: users.id, name: users.name })
-          .from(users)
-          .where(inArray(users.id, [...involvedUserIds]))
+    authorIds.length > 0
+      ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, authorIds))
       : [];
-  const authorMap = new Map(authorRows.map((r) => [r.id, r.name]));
+  const authorMap = new Map<string, string>(authorRows.map((r) => [r.id, r.name]));
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -103,11 +89,18 @@ export default async function IncidentDetailPage({
           </section>
         )}
 
-        <section className="space-y-3 rounded border border-neutral-200 bg-white p-4">
-          <h2 className="text-sm font-medium text-neutral-700">Timeline</h2>
-          <NoteForm slug={incident.publicSlug} />
-          <Timeline events={events} authors={authorMap} />
-        </section>
+        <IncidentLiveProvider
+          slug={incident.publicSlug}
+          initialEvents={events}
+          initialAuthors={[...authorMap.entries()].map(([id, name]): { id: string; name: string | null } => ({ id, name }))}
+        >
+          <section className="space-y-3 rounded border border-neutral-200 bg-white p-4">
+            <h2 className="text-sm font-medium text-neutral-700">Timeline</h2>
+            <ConnectionBanner />
+            <NoteForm slug={incident.publicSlug} currentUserId={userId} />
+            <Timeline />
+          </section>
+        </IncidentLiveProvider>
       </div>
 
       <aside className="space-y-4">
