@@ -1,10 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { type DB } from '@/lib/db/client';
 import { runbooks, type Runbook, type NewRunbook } from '@/lib/db/schema/runbooks';
-import { services } from '@/lib/db/schema/services';
+import { services, type Severity } from '@/lib/db/schema/services';
 import { requireTeamMember } from '@/lib/authz';
-
-type Severity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4';
 
 async function getServiceTeamId(db: DB, serviceId: string): Promise<string> {
   const [row] = await db

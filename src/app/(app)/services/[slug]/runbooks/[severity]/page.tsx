@@ -3,11 +3,10 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { findServiceBySlugForUser } from '@/lib/db/queries/services';
 import { getRunbook } from '@/lib/db/queries/runbooks';
+import { SEVERITY_VALUES, type Severity } from '@/lib/db/schema/services';
 import { saveRunbookAction } from './actions';
 
-const allowed = new Set(['SEV1', 'SEV2', 'SEV3', 'SEV4']);
-
-type Severity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4';
+const allowed = new Set<string>(SEVERITY_VALUES);
 
 export default async function RunbookEditor({
   params,

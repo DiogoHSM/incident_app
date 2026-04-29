@@ -1,7 +1,10 @@
 import { pgTable, pgEnum, uuid, text, timestamp, unique } from 'drizzle-orm/pg-core';
 import { teams } from './teams';
 
-export const severityEnum = pgEnum('severity', ['SEV1', 'SEV2', 'SEV3', 'SEV4']);
+export const SEVERITY_VALUES = ['SEV1', 'SEV2', 'SEV3', 'SEV4'] as const;
+export type Severity = (typeof SEVERITY_VALUES)[number];
+
+export const severityEnum = pgEnum('severity', SEVERITY_VALUES);
 
 export const services = pgTable(
   'services',

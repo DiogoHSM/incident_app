@@ -6,10 +6,11 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { findServiceBySlugForUser } from '@/lib/db/queries/services';
 import { upsertRunbook } from '@/lib/db/queries/runbooks';
+import { SEVERITY_VALUES } from '@/lib/db/schema/services';
 
 const schema = z.object({
   slug: z.string(),
-  severity: z.enum(['SEV1', 'SEV2', 'SEV3', 'SEV4']),
+  severity: z.enum(SEVERITY_VALUES),
   markdownBody: z.string().max(50_000),
 });
 
