@@ -17,7 +17,15 @@ export function getTestDb(): TestDB {
   return ctx.db;
 }
 
-const TABLES = ['runbooks', 'services', 'team_memberships', 'teams', 'users'] as const;
+const TABLES = [
+  'incident_services',
+  'incidents',
+  'runbooks',
+  'services',
+  'team_memberships',
+  'teams',
+  'users',
+] as const;
 
 async function truncateAll(client: Sql): Promise<void> {
   await client.unsafe(`TRUNCATE TABLE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`);
