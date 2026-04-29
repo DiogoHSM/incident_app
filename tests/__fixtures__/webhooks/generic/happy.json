@@ -1,0 +1,8 @@
+{
+  "title": "Database connection pool exhausted",
+  "fingerprint": "db-pool-exhausted-prod",
+  "severity": "SEV2",
+  "services": ["api", "checkout"],
+  "source_url": "https://internal.example.com/alerts/123",
+  "summary": "All 50 connections in use for 10 minutes"
+}
