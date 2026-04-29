@@ -14,7 +14,7 @@ interface Props {
 
 export default async function PostmortemPage({ params }: Props) {
   const session = await auth();
-  if (!session?.user) redirect('/sign-in');
+  if (!session?.user) redirect('/signin');
 
   const { slug } = await params;
   const found = await findPostmortemForIncidentSlug(db, session.user.id, slug);
