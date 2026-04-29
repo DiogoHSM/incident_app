@@ -11,6 +11,8 @@ import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { findUserById } from '@/lib/db/queries/users';
 import { requireTeamMember, ForbiddenError } from '@/lib/authz';
 import { generateIncidentSlug } from '@/lib/incidents/slug';
+import { timelineEvents } from '@/lib/db/schema/timeline';
+import { TimelineEventBodySchema, type IncidentRole } from '@/lib/timeline/body';
 
 export interface DeclareIncidentInput {
   teamId: string;
@@ -181,4 +183,116 @@ export async function findIncidentBySlugForUser(
     .where(eq(incidentServices.incidentId, incident.id));
 
   return { incident, affectedServices };
+}
+
+export class IncidentStateMachineError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'IncidentStateMachineError';
+  }
+}
+
+const ALLOWED_TRANSITIONS: Record<IncidentStatus, ReadonlySet<IncidentStatus>> = {
+  triaging: new Set<IncidentStatus>(['investigating', 'resolved']),
+  investigating: new Set<IncidentStatus>(['identified', 'monitoring', 'resolved']),
+  identified: new Set<IncidentStatus>(['monitoring', 'investigating', 'resolved']),
+  monitoring: new Set<IncidentStatus>(['investigating', 'resolved']),
+  resolved: new Set<IncidentStatus>(['investigating']),
+};
+
+export interface ChangeIncidentStatusOptions {
+  reason?: string;
+  assignIcUserId?: string;
+}
+
+export async function changeIncidentStatus(
+  db: DB,
+  actorUserId: string,
+  incidentId: string,
+  toStatus: IncidentStatus,
+  options: ChangeIncidentStatusOptions = {},
+): Promise<{ incident: Incident; statusEvent: typeof timelineEvents.$inferSelect } | null> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, incidentId))
+      .limit(1);
+    if (!current) throw new Error('Incident not found');
+
+    await requireTeamMember(tx as unknown as DB, actorUserId, current.teamId);
+
+    if (current.status === toStatus) return null;
+
+    const allowed = ALLOWED_TRANSITIONS[current.status];
+    if (!allowed.has(toStatus)) {
+      throw new IncidentStateMachineError(
+        `Cannot transition incident from ${current.status} to ${toStatus}`,
+      );
+    }
+
+    let assigningIcId: string | null = null;
+    if (current.status === 'triaging' && toStatus !== 'resolved') {
+      if (!current.icUserId && !options.assignIcUserId) {
+        throw new IncidentStateMachineError(
+          'An Incident Commander must be assigned when leaving triaging',
+        );
+      }
+      if (options.assignIcUserId && options.assignIcUserId !== current.icUserId) {
+        await requireTeamMember(tx as unknown as DB, options.assignIcUserId, current.teamId);
+        assigningIcId = options.assignIcUserId;
+      }
+    }
+
+    const nextResolvedAt =
+      toStatus === 'resolved' ? new Date() : current.status === 'resolved' ? null : current.resolvedAt;
+
+    const updateValues: Partial<typeof incidents.$inferInsert> = {
+      status: toStatus,
+      resolvedAt: nextResolvedAt,
+      updatedAt: new Date(),
+    };
+    if (assigningIcId) updateValues.icUserId = assigningIcId;
+
+    const [updated] = await tx
+      .update(incidents)
+      .set(updateValues)
+      .where(eq(incidents.id, incidentId))
+      .returning();
+    if (!updated) throw new Error('Update returned no rows');
+
+    if (assigningIcId) {
+      const roleBody = TimelineEventBodySchema.parse({
+        kind: 'role_change',
+        role: 'ic' satisfies IncidentRole,
+        fromUserId: current.icUserId,
+        toUserId: assigningIcId,
+      });
+      await tx.insert(timelineEvents).values({
+        incidentId,
+        authorUserId: actorUserId,
+        kind: 'role_change',
+        body: roleBody,
+      });
+    }
+
+    const statusBody = TimelineEventBodySchema.parse({
+      kind: 'status_change',
+      from: current.status,
+      to: toStatus,
+      reason: options.reason,
+    });
+    const [statusEvent] = await tx
+      .insert(timelineEvents)
+      .values({
+        incidentId,
+        authorUserId: actorUserId,
+        kind: 'status_change',
+        body: statusBody,
+      })
+      .returning();
+    if (!statusEvent) throw new Error('Insert returned no rows');
+
+    return { incident: updated, statusEvent };
+  });
 }
