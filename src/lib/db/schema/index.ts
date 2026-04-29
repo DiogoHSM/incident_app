@@ -8,3 +8,4 @@ export * from './timeline';
 export * from './postmortems';
 export * from './action-items';
 export * from './webhook-sources';
+export * from './dead-letters';
