@@ -4,4 +4,4 @@
 
 ## Índice
 
-<!-- - [Título](nome-do-arquivo.md) — descrição em uma linha -->
+- [Foundation phase deferred follow-ups](foundation_followups.md) — items flagged during Plan 1 reviews and intentionally deferred to v1.1 (races, e2e auth tests, citext, type augmentations, etc.)

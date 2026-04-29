@@ -1,0 +1,60 @@
+import { PostgreSqlContainer, StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import postgres, { type Sql } from 'postgres';
+import { expect } from 'vitest';
+import * as schema from '@/lib/db/schema';
+
+export type TestDB = ReturnType<typeof drizzle<typeof schema>>;
+
+export interface TestDBContext {
+  container: StartedPostgreSqlContainer;
+  client: Sql;
+  db: TestDB;
+  cleanup: () => Promise<void>;
+}
+
+export async function startTestDb(): Promise<TestDBContext> {
+  const container = await new PostgreSqlContainer('postgres:16-alpine')
+    .withDatabase('test')
+    .withUsername('test')
+    .withPassword('test')
+    .start();
+
+  const client = postgres(container.getConnectionUri(), { max: 5 });
+  const db = drizzle(client, { schema });
+
+  await migrate(db, { migrationsFolder: './drizzle' });
+
+  return {
+    container,
+    client,
+    db,
+    cleanup: async () => {
+      await client.end();
+      await container.stop();
+    },
+  };
+}
+
+export async function truncateAll(client: Sql): Promise<void> {
+  await client.unsafe(`
+    TRUNCATE TABLE
+      runbooks,
+      services,
+      team_memberships,
+      teams,
+      users
+    RESTART IDENTITY CASCADE
+  `);
+}
+
+export const DB_ERR_UNIQUE = /duplicate|unique/i;
+export const DB_ERR_FK = /foreign key|violates/i;
+export const DB_ERR_NOT_NULL = /null value|not-null/i;
+
+export function expectDbError(pattern: RegExp): object {
+  return expect.objectContaining({
+    cause: expect.objectContaining({ message: expect.stringMatching(pattern) }),
+  });
+}

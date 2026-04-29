@@ -1,0 +1,7 @@
+.next
+node_modules
+drizzle
+pnpm-lock.yaml
+.claude
+docs
+CLAUDE.md
