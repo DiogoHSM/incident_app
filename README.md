@@ -1,10 +1,17 @@
 # incident_app
 
-Web-first incident tracker for an internal multi-team org. See `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` for the full design and `docs/superpowers/plans/2026-04-28-foundation.md` for the foundation plan that produced the current code.
+Web-first incident tracker for an internal multi-team org. See `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` for the full design and the plans under `docs/superpowers/plans/` for the per-phase implementation work.
 
 ## Stack
 
 Next.js 16 · TypeScript (strict + `noUncheckedIndexedAccess`) · Tailwind v4 · Drizzle ORM + Postgres 16 · NextAuth v5 (Google OIDC) · Vitest + testcontainers · pnpm.
+
+## What works today
+
+- Plan 1 (Foundation): SSO sign-in (Google OIDC), org admin allowlist, teams + memberships, services, severity-keyed runbooks editor, sidebar shell.
+- Plan 2 (Incidents core): declare an incident with severity + summary + affected services; chip-filtered list view with admin-sees-all parity; per-incident detail page showing header, summary, affected services, and severity-keyed runbooks.
+
+Coming next (per spec §11): live timeline + SSE (Plan 3), role mutations and status/severity transitions including "Mark resolved" (Plan 4), postmortems (Plan 5), webhook ingestion (Plan 6), public status page (Plan 7), metrics dashboard (Plan 8).
 
 ## Local setup
 
@@ -32,24 +39,26 @@ pnpm dev           # http://localhost:3000
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # eslint .
 pnpm format:check  # prettier --check .
-pnpm test          # vitest run (31 tests, ~5s with testcontainers)
+pnpm test          # vitest run (55 tests, ~5s with one shared testcontainer)
 pnpm build         # next build
 ```
 
-Integration tests use real Postgres via testcontainers. **No DB mocks anywhere in the codebase.**
+Integration tests use real Postgres via testcontainers (single container shared across all files, TRUNCATE between tests). **No DB mocks anywhere in the codebase.**
 
 ## Layout
 
 - `src/app/` — Next.js routes (route groups: `(app)` for auth-walled, `(auth)` for sign-in)
+- `src/app/(app)/incidents/` — list, declare, detail, plus `_components/` for SeverityPill / StatusPill / FilterChips / IncidentRow
 - `src/app/api/` — auth callback + future webhooks
 - `src/lib/db/queries/` — only place that talks to the DB
+- `src/lib/incidents/` — incident-specific helpers (slug generator)
 - `src/lib/authz/` — `requireAdmin`, `requireTeamMember`, `ForbiddenError`
 - `src/lib/auth/` — NextAuth Edge/Node split (`config.ts` Edge-safe, `index.ts` Node)
 - `src/lib/env.ts` — zod-validated env loader
 - `src/components/shell/` — top-level layout primitives (Sidebar, Header)
 - `tests/integration/` — Vitest + testcontainers integration tests
 - `tests/unit/` — pure unit tests
-- `tests/setup/` — `db.ts` (testcontainers harness), `test-env.ts` (env stubs)
+- `tests/setup/` — `global.ts` (boots one container per run), `withTx.ts` (`useTestDb`/`getTestDb`/`expectDbError`), `db.ts` (re-export shim), `test-env.ts` (env stubs)
 - `drizzle/` — generated SQL migrations
 
 ## Acceptance checklist
@@ -66,23 +75,25 @@ After running `pnpm dev` against a real Google OAuth client:
 8. [ ] Sign in as the second user. Visit `/services` → "No services yet" (or empty list).
 9. [ ] Click "New service". Pick `Payments` from the team selector. Name `checkout-api`, slug `checkout-api`. Submit.
 10. [ ] Land on `/services/checkout-api`. Click `SEV2`. Type a markdown body. Save. Reload — body persists.
-11. [ ] Sign out. Visit `/dashboard` direct → redirected to `/signin`.
+11. [ ] Visit `/incidents` → empty state. Click **Declare incident**, set title `Login latency`, severity `SEV2`, attach `checkout-api`, submit.
+12. [ ] Land on `/incidents/inc-XXXXXXXX` — see severity/status pills, title, declared timestamp + duration, the attached service, and the SEV2 runbook entry for it.
+13. [ ] Back on `/incidents`, the row appears. Click chips to filter by status/severity/window — URL updates and the list re-filters.
+14. [ ] Sign in as a member of a different team — `/incidents` is empty (their team has no incidents).
+15. [ ] Sign in as admin — `/incidents` shows everything across teams.
+16. [ ] Sign out. Visit `/dashboard` directly → redirected to `/signin`.
 
 If any step fails, see `.claude/memory/foundation_followups.md` for known v1.1 issues.
 
-## Plan 1 deferred items
+## Deferred follow-ups
 
-A number of code-review issues were intentionally deferred to a v1.1 cleanup pass. They're tracked in `.claude/memory/foundation_followups.md`. Notably:
+A number of code-review issues were intentionally deferred to a v1.1 cleanup pass. They're tracked in `.claude/memory/foundation_followups.md`. The three Plan 2 prereqs flagged by the Plan 1 reviewer (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` race) are now resolved in Plan 2; remaining items include:
 
-- Concurrent first-login race in `provisionUserOnSignIn`
 - End-to-end auth chain test
-- Admin-sees-all inconsistency in services queries
 - N+1 user lookups in settings page
 - Server Action error handling via `useFormState`
-- testcontainer scaling (likely needs single-shared-container before Plan 2)
+- Severity enum source-of-truth consolidation (resolved in Plan 2)
+- `users.email` citext / `lower()` CHECK constraint
+- `AdapterUser` type augmentation (drops the `as` casts in auth)
+- `middleware.ts` → `proxy.ts` rename for Next 16
 
 Address these in v1.1 before any production rollout.
-
-## What's next
-
-This repo currently delivers Plan 1 (Foundation) only. Plans 2–8 will add: incidents core, real-time SSE, postmortems, webhooks, status page, metrics, and final polish. See the design spec for the full scope.

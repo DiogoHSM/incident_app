@@ -1,47 +1,48 @@
 # Guardrails — incident_app
 
-> **Sempre carregado.** Mapa "antes de tocar em X, leia Y" — para Claude saber qual contexto buscar antes de cada edição.
+> **Always loaded.** "Before touching X, read Y" map — so Claude knows which context to fetch before each edit.
 
-**Última revisão**: 2026-04-28 (após merge do Plan 1)
+**Last revision**: 2026-04-28 (after Plan 2 merge)
 
 ---
 
-## Antes de editar
+## Before editing
 
-Antes de modificar um arquivo que se encaixe numa categoria, **leia o(s) doc(s) correspondente(s)**. Se o doc não existir, crie a partir do template indicado.
+Before modifying a file that fits one of these categories, **read the corresponding doc(s)**. If a doc doesn't exist yet, create it from the indicated template.
 
-| Ao tocar em… | Leia antes | Por quê |
+| When touching… | Read first | Why |
 |---|---|---|
-| Escopo, modelo de domínio, decisões de v1 | `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` | Spec é a fonte de verdade — todas as decisões de Plan 1 vieram dela |
-| Plano de implementação atual ou follow-ups | `docs/superpowers/plans/2026-04-28-foundation.md`, `.claude/memory/foundation_followups.md` | Itens deferidos de v1.1 já estão mapeados — não recriar |
-| Schema do DB (`src/lib/db/schema/*.ts`), migrations (`drizzle/*`), seeds | spec §4.1 + `foundation_followups.md` | Mudança de dados é irreversível; várias decisões (severity tiers, FK cascade vs restrict, citext) já discutidas |
-| Camada de queries (`src/lib/db/queries/*.ts`) | `CLAUDE.md` (boundary rules) + `src/lib/authz/index.ts` | Único lugar que chama Drizzle direto. Toda query que aceita `userId` precisa passar por `requireAdmin` ou `requireTeamMember` |
-| Auth — `src/lib/auth/config.ts` ou `src/middleware.ts` | spec §3.4 + `eslint.config.mjs` (no-restricted-imports rule) | Edge-safe boundary. **PROIBIDO** importar `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, `node:*`. Lint vai bloquear mesmo se você esquecer |
-| Auth — `src/lib/auth/index.ts`, `src/lib/auth/provision.ts` | spec §3.4 + `foundation_followups.md` (Task 7 race condition deferred) | Lógica Node-side, faz DB lookups |
-| Server Actions (`src/app/**/actions.ts`) | `foundation_followups.md` (Task 10/11 error UX gap) | Padrão atual `throw new Error(...)` cai no `error.tsx`. v1.1 vai migrar para `useFormState` retornando `{ ok: false, errors }` |
-| Variáveis de ambiente, `.env.example`, `src/lib/env.ts` | `README.md` setup section + spec §3.4 | `.env.local` carrega placeholders Google em dev; `.env.example` deve refletir a forma exata. Sempre validar via zod antes de exportar |
-| Componentes UI (`src/app/**/*.tsx`, `src/components/**`) | `CLAUDE.md` boundary rules | Não chamar Drizzle direto — sempre via `queries/*.ts`. Não compor authz nas rotas — confiar nos guards das queries |
-| Testes integration (`tests/integration/*.test.ts`), setup (`tests/setup/db.ts`) | `CLAUDE.md` (`expectDbError`, strict-mode pattern) + `foundation_followups.md` (testcontainer scaling) | Container por arquivo hoje; precisa virar shared+savepoint antes do Plan 2 |
-| Deploy, CI, GitHub Actions | (criar `.claude/docs/DEPLOYMENT.md` quando houver) | Sem CI ainda. Quando criar workflow, preencher `DEPLOYMENT.md` a partir do template |
-| Stack: novas dependências em `package.json` | `CLAUDE.md` Stack section + spec §10 | Manter alinhado com Next 16 / Drizzle 0.45 / NextAuth v5 beta / Vitest 4 / pnpm |
+| Scope, domain model, v1 decisions | `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` | The spec is the source of truth — every Plan 1/2 decision came from it |
+| Active or completed implementation plan, deferred follow-ups | `docs/superpowers/plans/2026-04-28-foundation.md`, `docs/superpowers/plans/2026-04-28-incidents-core.md`, `.claude/memory/foundation_followups.md` | Deferred items are mapped — don't recreate them |
+| DB schema (`src/lib/db/schema/*.ts`), migrations (`drizzle/*`), seeds | spec §4.1 + `foundation_followups.md` | Data changes are forward-only; many decisions (severity tiers, FK cascade vs restrict, citext) are already settled |
+| Query layer (`src/lib/db/queries/*.ts`) | `CLAUDE.md` (boundary rules) + `src/lib/authz/index.ts` | Only place that calls Drizzle directly. Every read query that takes `userId` either calls `requireTeamMember`/`requireAdmin` or branches on `user.role === 'admin'` for admin-sees-all |
+| Incidents schema (`src/lib/db/schema/incidents.ts`), queries (`src/lib/db/queries/incidents.ts`), routes (`src/app/(app)/incidents/**`) | spec §4.1 + §5.1 + §6.3 + `2026-04-28-incidents-core.md` plan | New tables — incidents/incident_services. Slug generator in `src/lib/incidents/slug.ts` is the only place that mints public slugs (3-retry on collision in `declareIncident`). Timeline + status mutations are deferred (Plans 3/4) — don't add them ad-hoc |
+| Auth — `src/lib/auth/config.ts` or `src/middleware.ts` | spec §3.4 + `eslint.config.mjs` (no-restricted-imports rule) | Edge-safe boundary. **FORBIDDEN** to import `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, `node:*`. Lint will block even if you forget |
+| Auth — `src/lib/auth/index.ts`, `src/lib/auth/provision.ts` | spec §3.4 + `foundation_followups.md` | Node-side logic, does DB lookups. `provisionUserOnSignIn` is now atomic via INSERT ... ON CONFLICT — don't regress |
+| Server Actions (`src/app/**/actions.ts`) | `foundation_followups.md` (Task 10/11 error UX gap) | Current pattern `throw new Error(...)` falls through to `error.tsx`. v1.1 will migrate to `useFormState` returning `{ ok: false, errors }` |
+| Env vars, `.env.example`, `src/lib/env.ts` | `README.md` setup section + spec §3.4 | `.env.local` carries Google placeholders in dev; `.env.example` must reflect the exact shape. Always validate via zod before exporting |
+| UI components (`src/app/**/*.tsx`, `src/components/**`) | `CLAUDE.md` boundary rules | Don't call Drizzle directly — always via `queries/*.ts`. Don't compose authz in routes — trust the guards inside queries |
+| Integration tests (`tests/integration/*.test.ts`), setup (`tests/setup/global.ts`, `tests/setup/withTx.ts`, `tests/setup/db.ts`) | `CLAUDE.md` (`expectDbError`, strict-mode pattern, useTestDb pattern) | Single shared container + TRUNCATE-per-test pattern. `useTestDb()` must be called *inside* a `describe` block (ESLint rule `react-hooks/rules-of-hooks` flags top-level usage). Keep `fileParallelism: false` in `vitest.config.ts` |
+| Deploy, CI, GitHub Actions | (create `.claude/docs/DEPLOYMENT.md` when needed) | No CI yet. When creating a workflow, populate `DEPLOYMENT.md` from the template |
+| Stack: new dependencies in `package.json` | `CLAUDE.md` Stack section + spec §10 | Keep aligned with Next 16 / Drizzle 0.45 / NextAuth v5 beta / Vitest 4 / pnpm |
 
 ---
 
-## Antes de executar ações destrutivas ou irreversíveis
+## Before destructive or irreversible actions
 
-Pare e confirme se qualquer item abaixo falhar:
+Stop and confirm if any of these fail:
 
-- [ ] `bash ~/.claude/scripts/check-context.sh` sem 🔴
-- [ ] Se DB: backup recente; migration testada via `pnpm test` (testcontainers já valida apply); o usuário autorizou aplicar em prod
-- [ ] Se push em main: tests passam (31/31); reviewer aprovou (per-task) ou usuário autorizou explicitamente
-- [ ] Se publicar repo / criar resource cloud: o usuário autorizou nome e visibilidade
+- [ ] `bash ~/.claude/scripts/check-context.sh` shows no 🔴
+- [ ] If DB: recent backup; migration tested via `pnpm test` (testcontainers already verifies apply); user authorized applying in prod
+- [ ] If pushing to main: tests pass (currently 55/55); reviewer approved (per-task) or user authorized explicitly
+- [ ] If publishing repo / creating cloud resource: user authorized name and visibility
 
-Destrutivas: `rm -rf`, `DROP TABLE`, `git push --force`, `git reset --hard`, apagar branches publicados, amend em commits pushed, deploy em produção, criar repo público, deletar containers/volumes Postgres com dados.
+Destructive: `rm -rf`, `DROP TABLE`, `git push --force`, `git reset --hard`, deleting published branches, amending pushed commits, deploying to production, creating public repo, deleting Postgres containers/volumes with data.
 
 ---
 
-## Atualização contínua
+## Continuous maintenance
 
-- **A cada doc criado/removido** em `docs/superpowers/specs|plans/` ou `.claude/docs/`: atualize a tabela.
-- **Sempre que descobrir nova área de risco** não coberta: adicione uma linha.
-- **Mantenha curto**: este arquivo é carregado em toda sessão.
+- **Whenever a doc is created/removed** in `docs/superpowers/specs|plans/` or `.claude/docs/`: update the table.
+- **Whenever you discover a new risk area** not covered: add a row.
+- **Keep it short**: this file is loaded into every session.

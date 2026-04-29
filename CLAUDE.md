@@ -1,43 +1,46 @@
-# incident_app — Contexto para Claude Code
+# incident_app — Context for Claude Code
 
-> Web-first incident coordination tool, single org, multi-team, SSO. **Plan 1 (Foundation) shipped 2026-04-28.** Repo público em https://github.com/DiogoHSM/incident_app.
+> Web-first incident coordination tool, single org, multi-team, SSO. **Plan 1 (Foundation) shipped 2026-04-28. Plan 2 (Incidents core) shipped 2026-04-28.** Public repo at https://github.com/DiogoHSM/incident_app.
 
-## Documentação canônica
+## Canonical documentation
 
-A documentação técnica vive em **dois lugares** neste projeto (não nos `.claude/docs/*.md` padrão):
+Technical docs live in **two places** in this project (not in the standard `.claude/docs/*.md`):
 
-| Doc | Onde | O que cobre |
+| Doc | Location | Covers |
 |---|---|---|
-| Design spec (escopo + arquitetura + decisões) | `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` | Substitui PROJECT-SUMMARY + ARCHITECTURE + STACK + CONSTRAINTS + DECISIONS para v1 |
-| Plano de implementação Foundation | `docs/superpowers/plans/2026-04-28-foundation.md` | Os 13 tasks do Plan 1 (Foundation) que produziram o estado atual |
-| README | `README.md` | Setup local, gates, layout, checklist de aceitação manual |
-| Follow-ups deferidos | `.claude/memory/foundation_followups.md` | Itens flagados por code reviews que ficaram para v1.1 |
-| Guardrails (lazy loading) | `.claude/GUARDRAILS.md` | Mapa "antes de tocar em X, leia Y" |
+| Design spec (scope + architecture + decisions) | `docs/superpowers/specs/2026-04-28-incident-tracker-design.md` | Replaces PROJECT-SUMMARY + ARCHITECTURE + STACK + CONSTRAINTS + DECISIONS for v1 |
+| Foundation implementation plan | `docs/superpowers/plans/2026-04-28-foundation.md` | The 13 Plan 1 (Foundation) tasks that produced the initial state |
+| Incidents core implementation plan | `docs/superpowers/plans/2026-04-28-incidents-core.md` | The 12 Plan 2 tasks (3 Plan 1 follow-up prereqs + incidents schema/queries/routes) |
+| README | `README.md` | Local setup, gates, layout, manual acceptance checklist |
+| Deferred follow-ups | `.claude/memory/foundation_followups.md` | Items flagged by code reviews and intentionally deferred |
+| Guardrails (lazy loading) | `.claude/GUARDRAILS.md` | "Before touching X, read Y" map |
 
-**Não criar `.claude/docs/PROJECT-SUMMARY.md` etc.** — o design spec acima cobre. Criar apenas se a divisão por arquivo se justificar (UI-UX, INFRASTRUCTURE específicos de prod, etc.).
+**Do not create `.claude/docs/PROJECT-SUMMARY.md` etc.** — the design spec covers that. Create a per-file doc only when the split is justified (UI-UX, INFRASTRUCTURE specific to prod, etc.).
 
-## Stack atual
+## Current stack
 
-Next.js 16 (App Router) · TypeScript strict + `noUncheckedIndexedAccess` · Tailwind v4 (CSS-first, sem `tailwind.config.ts`) · ESLint flat config (`eslint.config.mjs`) · Prettier · pnpm · Drizzle ORM 0.45 + Postgres 16 (docker-compose, port 5433) · NextAuth v5 beta com Edge/Node split + Google OIDC · Vitest 4 + testcontainers (real Postgres, sem mocks de DB) · zod em todos os boundaries.
+Next.js 16 (App Router) · TypeScript strict + `noUncheckedIndexedAccess` · Tailwind v4 (CSS-first, no `tailwind.config.ts`) · ESLint flat config (`eslint.config.mjs`) · Prettier · pnpm · Drizzle ORM 0.45 + Postgres 16 (docker-compose, port 5433) · NextAuth v5 beta with Edge/Node split + Google OIDC · Vitest 4 + testcontainers (real Postgres, no DB mocks) · zod at every boundary.
 
-## Convenções locais
+## Local conventions
 
-- **Layering boundary**: `src/lib/db/queries/*.ts` é o único lugar que chama Drizzle direto. Routes, Server Actions e components importam de lá. Aplicado pelo plan e revalidado no review final do Plan 1.
-- **Authz boundary**: `src/lib/authz/index.ts` (`requireAdmin`, `requireTeamMember`, `ForbiddenError`) é a fronteira de segurança. Chamada nas queries, não nas rotas.
-- **Edge/Node split (NextAuth v5)**: `src/lib/auth/config.ts` é Edge-safe — proibido importar `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, `node:*`. Aplicado por regra do ESLint (`eslint.config.mjs:17-34`, `no-restricted-imports`). `src/lib/auth/index.ts` é Node, faz o trabalho real.
-- **Strict mode + Drizzle `.returning()`**: sempre `const [row] = await ...returning(); if (!row) throw new Error(...);` antes de retornar como tipo não-nulo. Padrão repetido em todas as queries.
-- **Erros de DB nos testes**: Drizzle 0.45 embrulha erros em `DrizzleQueryError`. Use `expectDbError(DB_ERR_UNIQUE)` de `tests/setup/db.ts` (anda na chain `cause`) — não use `.toThrow(/duplicate/)` direto.
-- **Migrations forward-only**, geradas via `pnpm db:generate`, aplicadas via `pnpm db:migrate` (passa `dotenv -e .env.local`). Migrations atuais: `0000` users/teams/team_memberships, `0001` services/runbooks.
-- **Co-author trailer obrigatório** em todos os commits: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
+- **Layering boundary**: `src/lib/db/queries/*.ts` is the only place that calls Drizzle directly. Routes, Server Actions, and components import from there. Enforced by the plans and revalidated in every code review.
+- **Authz boundary**: `src/lib/authz/index.ts` (`requireAdmin`, `requireTeamMember`, `ForbiddenError`) is the security boundary. Called from queries, not routes. Queries that branch on `user.role === 'admin'` for read-time admin-sees-all do so consistently across services and incidents.
+- **Edge/Node split (NextAuth v5)**: `src/lib/auth/config.ts` is Edge-safe — forbidden to import `pg`, `postgres`, `drizzle-orm`, `@/lib/db/*`, or `node:*`. Enforced by an ESLint rule (`eslint.config.mjs:17-34`, `no-restricted-imports`). `src/lib/auth/index.ts` is Node and does the real work.
+- **Strict mode + Drizzle `.returning()`**: always `const [row] = await ...returning(); if (!row) throw new Error(...);` before returning as a non-null type. Pattern repeated in every query.
+- **DB errors in tests**: Drizzle 0.45 wraps errors in `DrizzleQueryError`. Use `expectDbError(DB_ERR_UNIQUE)` from `tests/setup/db.ts` (it walks the `cause` chain) — do not use `.toThrow(/duplicate/)` directly.
+- **Test infrastructure**: a single Postgres testcontainer is booted in `tests/setup/global.ts` and reused across all integration files. Per-test isolation is via `TRUNCATE` in `useTestDb()` (`tests/setup/withTx.ts`). `vitest.config.ts` has `fileParallelism: false` because TRUNCATE-per-test is incompatible with parallel file execution against a shared schema.
+- **Migrations forward-only**, generated via `pnpm db:generate`, applied via `pnpm db:migrate` (which passes `dotenv -e .env.local`). Current migrations: `0000` users/teams/team_memberships, `0001` services/runbooks, `0002` incidents/incident_services.
+- **Incident slugs**: minted only by `src/lib/incidents/slug.ts` (`generateIncidentSlug()`). Format `inc-XXXXXXXX` (8 lowercase alphanumerics from `crypto.randomBytes`). `declareIncident` retries up to 3× on the unique violation.
+- **Mandatory co-author trailer** on every commit: `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 
-## Pontos de atenção
+## Notes
 
-- **`.env.local` carrega placeholders** para `AUTH_GOOGLE_CLIENT_ID/SECRET` (necessário para `pnpm build` passar com a refinement do env schema). Trocar por credenciais reais antes de tentar sign-in. Documentado no `.env.example` como item deferido.
-- **Aviso de deprecation do middleware**: Next 16 quer `proxy.ts`, mas `middleware.ts` ainda funciona. Rename está nos follow-ups.
-- **`/incidents` e `/metrics` no sidebar dão 404 hoje** — rotas ainda não existem (chegam no Plan 2/7). Decidir entre placeholder routes ou link disabled antes de mostrar para usuários.
-- **Plan 2 prerequisites**: o reviewer final pediu 3 fixes antes do Plan 2 — testcontainer scaling, admin-sees-all consistency, `provisionUserOnSignIn` ON CONFLICT. Estão em `foundation_followups.md`.
+- **`.env.local` carries placeholders** for `AUTH_GOOGLE_CLIENT_ID/SECRET` (needed for `pnpm build` to pass the env schema refinement). Swap for real credentials before attempting sign-in. Documented in `.env.example` as a deferred item.
+- **Middleware deprecation warning**: Next 16 wants `proxy.ts`, but `middleware.ts` still works. Rename is in the follow-ups.
+- **`/metrics` in the sidebar still 404s** — that route arrives in Plan 8. `/incidents` is now live (Plan 2). Decide between placeholder route or disabled link for `/metrics` before showing the app to users.
 
-## Histórico de atualizações
+## Update history
 
-- 2026-04-28: Estrutura inicial (`.claude/`, `CLAUDE.md`, `GUARDRAILS.md`, `MEMORY.md`).
-- 2026-04-28: **Plan 1 (Foundation) implementado e merged em main**. 26 commits, 31 testes integration passando. Repo público criado em https://github.com/DiogoHSM/incident_app. CLAUDE.md + GUARDRAILS.md atualizados para refletir stack real.
+- 2026-04-28: Initial structure (`.claude/`, `CLAUDE.md`, `GUARDRAILS.md`, `MEMORY.md`).
+- 2026-04-28: **Plan 1 (Foundation) implemented and merged to main**. 26 commits, 31 integration tests passing. Public repo created at https://github.com/DiogoHSM/incident_app. CLAUDE.md + GUARDRAILS.md updated to reflect the real stack.
+- 2026-04-28: **Plan 2 (Incidents core) implemented**. Three Plan 1 follow-up prereqs resolved (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` ON CONFLICT). New `incidents` + `incident_services` tables, `declareIncident`/`listIncidentsForUser`/`findIncidentBySlugForUser` queries with admin-sees-all parity. Routes live: `/incidents`, `/incidents/new`, `/incidents/[slug]` (no real-time, no role mutations, no timeline events — those are Plan 3/4). Test count climbed from 31 to 55. All project content is now English-only (per `.claude/memory/feedback_language_english.md`).
