@@ -20,6 +20,7 @@ const StatusChangeBody = z.object({
     .transform((s) => s.trim())
     .pipe(z.string().min(1))
     .optional(),
+  dismissed: z.boolean().optional(),
 });
 
 const SeverityChangeBody = z.object({
@@ -40,12 +41,23 @@ const PostmortemLinkBody = z.object({
   postmortemId: z.string().uuid(),
 });
 
+const WebhookBody = z.object({
+  kind: z.literal('webhook'),
+  sourceId: z.string().uuid(),
+  sourceType: z.enum(['generic', 'sentry', 'datadog', 'grafana']),
+  sourceName: z.string().min(1).max(200),
+  fingerprint: z.string().min(1).max(500),
+  sourceUrl: z.string().url().max(2_000).optional(),
+  summary: z.string().max(1_000).optional(),
+});
+
 export const TimelineEventBodySchema = z.discriminatedUnion('kind', [
   NoteBody,
   StatusChangeBody,
   SeverityChangeBody,
   RoleChangeBody,
   PostmortemLinkBody,
+  WebhookBody,
 ]);
 
 export type TimelineEventBody = z.infer<typeof TimelineEventBodySchema>;
