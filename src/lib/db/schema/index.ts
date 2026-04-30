@@ -9,3 +9,4 @@ export * from './postmortems';
 export * from './action-items';
 export * from './webhook-sources';
 export * from './dead-letters';
+export * from './status-snapshots';
