@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 
 export default function PublicLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100">
       <header className="border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
         <div className="mx-auto max-w-4xl">
-          <a href="/status" className="text-base font-semibold tracking-tight">
+          <Link href="/status" className="text-base font-semibold tracking-tight">
             Status
-          </a>
+          </Link>
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-6 py-8">{children}</main>

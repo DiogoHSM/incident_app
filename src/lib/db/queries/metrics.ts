@@ -2,7 +2,6 @@ import { and, eq, gte, lte, inArray, sql, asc } from 'drizzle-orm';
 import type { DB } from '@/lib/db/client';
 import { incidents, incidentServices } from '@/lib/db/schema/incidents';
 import { services, type Severity } from '@/lib/db/schema/services';
-import { timelineEvents } from '@/lib/db/schema/timeline';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
 import { findUserById } from '@/lib/db/queries/users';
 import { requireTeamMember } from '@/lib/authz';

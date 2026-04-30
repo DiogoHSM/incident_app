@@ -19,7 +19,6 @@ describe('webhook ingest core', () => {
   let admin: { id: string };
   let teamId: string;
   let serviceA: { id: string; slug: string };
-  let serviceB: { id: string; slug: string };
   let source: WebhookSource;
 
   beforeEach(async () => {
@@ -38,13 +37,8 @@ describe('webhook ingest core', () => {
       .insert(services)
       .values({ teamId, name: 'API', slug: 'api' })
       .returning();
-    const [b] = await db
-      .insert(services)
-      .values({ teamId, name: 'Checkout', slug: 'checkout' })
-      .returning();
-    if (!a || !b) throw new Error('services');
+    if (!a) throw new Error('services');
     serviceA = { id: a.id, slug: a.slug };
-    serviceB = { id: b.id, slug: b.slug };
 
     const created = await createWebhookSource(db, admin.id, {
       teamId,
