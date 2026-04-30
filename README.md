@@ -94,16 +94,16 @@ sequenceDiagram
         Page-->>U: email input form
         U->>Page: submit email
         Page->>NA: signIn('credentials', {email})
-        NA->>NA: authorize() returns {id:'dev:<email>', email, name, role:'member'}
+        NA->>NA: authorize returns id, email, name, role=member
     else google mode
         Page->>NA: signIn('google')
         NA->>U: redirect to Google
         U->>NA: OIDC callback
     end
-    NA->>P: signIn callback (email, providerAccountId)
-    P->>DB: INSERT users ... ON CONFLICT (email) DO UPDATE
-    P-->>NA: {id, role}  (role from ADMIN_EMAILS)
-    NA->>NA: jwt() stores userId+role; session() projects them
+    NA->>P: signIn callback with email + providerAccountId
+    P->>DB: INSERT users ON CONFLICT email DO UPDATE
+    P-->>NA: id + role (role from ADMIN_EMAILS)
+    NA->>NA: jwt stores userId+role; session projects them
     NA-->>U: cookie set, redirect /dashboard
 ```
 
