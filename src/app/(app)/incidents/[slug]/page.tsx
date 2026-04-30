@@ -121,6 +121,7 @@ export default async function IncidentDetailPage({
           <h2 className="mb-2 text-sm font-medium text-neutral-700">Quick actions</h2>
           <div className="space-y-3">
             <StatusControl
+              incidentId={incident.id}
               slug={incident.publicSlug}
               current={incident.status}
               hasIc={incident.icUserId !== null}

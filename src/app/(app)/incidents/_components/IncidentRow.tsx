@@ -17,10 +17,17 @@ export function IncidentRow({ incident }: { incident: Incident }) {
   return (
     <Link
       href={`/incidents/${incident.publicSlug}`}
-      className="grid grid-cols-[80px_120px_1fr_auto] items-center gap-3 px-4 py-3 hover:bg-neutral-50"
+      className="grid grid-cols-[80px_1fr_1fr_auto] items-center gap-3 px-4 py-3 hover:bg-neutral-50"
     >
       <SeverityPill value={incident.severity} />
-      <StatusPill value={incident.status} />
+      <span className="flex items-center gap-1">
+        <StatusPill value={incident.status} />
+        {incident.status === 'triaging' && incident.declaredBy === null && (
+          <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+            ⚠ unconfirmed
+          </span>
+        )}
+      </span>
       <span className="truncate font-medium">{incident.title}</span>
       <span className="text-xs text-neutral-500">{timeAgo(incident.declaredAt)}</span>
     </Link>
