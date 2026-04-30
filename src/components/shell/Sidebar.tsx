@@ -22,9 +22,14 @@ export function Sidebar({ role }: Props) {
           </Link>
         ))}
         {role === 'admin' && (
-          <Link href="/settings/teams" className="rounded px-2 py-1.5 hover:bg-white">
-            Settings
-          </Link>
+          <>
+            <Link href="/settings/teams" className="rounded px-2 py-1.5 hover:bg-white">
+              Settings
+            </Link>
+            <Link href="/settings/webhooks" className="rounded px-2 py-1.5 hover:bg-white">
+              Webhooks
+            </Link>
+          </>
         )}
       </nav>
     </aside>
