@@ -94,16 +94,16 @@ sequenceDiagram
         Page-->>U: email input form
         U->>Page: submit email
         Page->>NA: signIn('credentials', {email})
-        NA->>NA: authorize() returns {id:'dev:<email>', email, name, role:'member'}
+        NA->>NA: authorize returns id, email, name, role=member
     else google mode
         Page->>NA: signIn('google')
         NA->>U: redirect to Google
         U->>NA: OIDC callback
     end
-    NA->>P: signIn callback (email, providerAccountId)
-    P->>DB: INSERT users ... ON CONFLICT (email) DO UPDATE
-    P-->>NA: {id, role}  (role from ADMIN_EMAILS)
-    NA->>NA: jwt() stores userId+role; session() projects them
+    NA->>P: signIn callback with email + providerAccountId
+    P->>DB: INSERT users ON CONFLICT email DO UPDATE
+    P-->>NA: id + role (role from ADMIN_EMAILS)
+    NA->>NA: jwt stores userId+role; session projects them
     NA-->>U: cookie set, redirect /dashboard
 ```
 
@@ -305,15 +305,6 @@ A list of code-review findings deferred to a v1.1 cleanup pass lives at [`.claud
 
 Address these before any production rollout.
 
-## License suggestion
+## License
 
-If your goal is "free to use, modify, and share" with minimal friction and no commercial restriction, use the **MIT License**.
-
-Why MIT is a strong fit here:
-
-- Very permissive and widely understood.
-- Allows personal, educational, and commercial use.
-- Keeps attribution/disclaimer requirements simple.
-- Maximizes adoption and contributions.
-
-If you want to waive even more rights and push this close to public domain, consider **CC0-1.0** instead.
+MIT — see [`LICENSE`](LICENSE).
