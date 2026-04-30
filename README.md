@@ -83,28 +83,29 @@ Key invariants:
 ```mermaid
 sequenceDiagram
     actor U as User
-    participant Page as /signin
-    participant NA as NextAuth (Node)
-    participant P as provisionUserOnSignIn
+    participant Page as Signin
+    participant NA as NextAuth
+    participant P as Provision
     participant DB as Postgres
-    Note over Page,NA: AUTH_PROVIDER=dev — Credentials provider<br/>AUTH_PROVIDER=google — Google OIDC
+    Note over Page,NA: dev mode uses Credentials provider, google mode uses Google OIDC
 
-    U->>Page: open /signin
+    U->>Page: open signin
     alt dev mode
         Page-->>U: email input form
         U->>Page: submit email
-        Page->>NA: signIn('credentials', {email})
-        NA->>NA: authorize returns id, email, name, role=member
+        Page->>NA: signIn credentials
+        NA->>NA: authorize returns id email name role
     else google mode
-        Page->>NA: signIn('google')
+        Page->>NA: signIn google
         NA->>U: redirect to Google
         U->>NA: OIDC callback
     end
-    NA->>P: signIn callback with email + providerAccountId
-    P->>DB: INSERT users ON CONFLICT email DO UPDATE
-    P-->>NA: id + role (role from ADMIN_EMAILS)
-    NA->>NA: jwt stores userId+role; session projects them
-    NA-->>U: cookie set, redirect /dashboard
+    NA->>P: signIn callback with email and providerAccountId
+    P->>DB: insert users on conflict email do update
+    P-->>NA: returns id and role from ADMIN_EMAILS
+    NA->>NA: jwt stores userId and role
+    NA->>NA: session projects userId and role
+    NA-->>U: cookie set, redirect to dashboard
 ```
 
 The same `provisionUserOnSignIn` runs in both modes, so `ADMIN_EMAILS` is the single switch that decides who becomes admin on first sign-in. Role transitions after first sign-in go through the admin UI — `provisionUserOnSignIn` intentionally omits `role` from its `ON CONFLICT DO UPDATE SET` so re-login can never demote you.
