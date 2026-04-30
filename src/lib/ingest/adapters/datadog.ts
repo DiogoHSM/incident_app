@@ -37,7 +37,7 @@ export const datadogAdapter: Adapter = {
     const provided = headers.get('x-datadog-signature');
     if (!provided) return { ok: false, reason: 'missing X-Datadog-Signature' };
 
-    const aes = expectSecretShape(source.secretMaterial as never, 'aes');
+    const aes = expectSecretShape(source.secretMaterial, 'aes');
     const secret = decryptSecret(aes);
     const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
 

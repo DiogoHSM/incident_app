@@ -6,7 +6,7 @@ import {
   type WebhookSource,
   type WebhookSourceType,
 } from '@/lib/db/schema/webhook-sources';
-import type { Severity } from '@/lib/db/schema/services';
+import { services, type Severity } from '@/lib/db/schema/services';
 import { requireAdmin } from '@/lib/authz';
 import { encryptSecret, hashBearer, type SecretMaterial } from '@/lib/ingest/secret-material';
 
@@ -60,6 +60,18 @@ export async function createWebhookSource(
   input: CreateWebhookSourceInput,
 ): Promise<{ source: WebhookSource; plaintextSecret: string }> {
   await requireAdmin(db, actorUserId);
+
+  if (input.defaultServiceId) {
+    const [svc] = await db
+      .select({ teamId: services.teamId })
+      .from(services)
+      .where(eq(services.id, input.defaultServiceId))
+      .limit(1);
+    if (!svc || svc.teamId !== input.teamId) {
+      throw new Error(`defaultServiceId does not belong to teamId ${input.teamId}`);
+    }
+  }
+
   const plaintextSecret = newPlaintextSecret();
   const secretMaterial = await buildSecretMaterial(input.type, plaintextSecret);
 

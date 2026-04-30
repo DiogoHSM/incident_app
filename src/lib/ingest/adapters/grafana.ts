@@ -27,7 +27,7 @@ export const grafanaAdapter: Adapter = {
     if (!auth.startsWith(SCHEME)) return { ok: false, reason: 'wrong scheme' };
     const candidate = auth.slice(SCHEME.length);
 
-    const bcryptShape = expectSecretShape(source.secretMaterial as never, 'bcrypt');
+    const bcryptShape = expectSecretShape(source.secretMaterial, 'bcrypt');
     const ok = await compareBearer(candidate, bcryptShape);
     if (!ok) return { ok: false, reason: 'bearer mismatch' };
     return { ok: true };

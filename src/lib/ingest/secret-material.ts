@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { env } from '@/lib/env';
 
 export type AesSecret = {
@@ -56,18 +57,37 @@ export async function compareBearer(candidate: string, material: BcryptSecret): 
   return bcrypt.compare(candidate, material.hash);
 }
 
+const AesSecretSchema = z.object({
+  kind: z.literal('aes'),
+  ciphertext: z.string().min(1),
+  iv: z.string().min(1),
+  authTag: z.string().min(1),
+});
+
+const BcryptSecretSchema = z.object({
+  kind: z.literal('bcrypt'),
+  hash: z.string().min(1),
+});
+
+const SecretMaterialSchema = z.discriminatedUnion('kind', [AesSecretSchema, BcryptSecretSchema]);
+
 /**
  * Type narrowing helper — used by the route to dispatch verify() based on
  * the column shape rather than the source's `type` column directly. They
  * should always agree (HMAC adapters use 'aes', Grafana uses 'bcrypt'),
  * but this function makes the consistency check explicit.
+ *
+ * Accepts `unknown` (jsonb column) and validates the full shape via zod
+ * before narrowing — a malformed stored value throws here with a clear
+ * error rather than crashing deeper inside decryptSecret.
  */
 export function expectSecretShape<K extends SecretMaterial['kind']>(
-  material: SecretMaterial,
+  material: unknown,
   kind: K,
 ): Extract<SecretMaterial, { kind: K }> {
-  if (material.kind !== kind) {
-    throw new Error(`Expected secret_material.kind=${kind}, got ${material.kind}`);
+  const parsed = SecretMaterialSchema.parse(material);
+  if (parsed.kind !== kind) {
+    throw new Error(`Expected secret_material.kind=${kind}, got ${parsed.kind}`);
   }
-  return material as Extract<SecretMaterial, { kind: K }>;
+  return parsed as Extract<SecretMaterial, { kind: K }>;
 }

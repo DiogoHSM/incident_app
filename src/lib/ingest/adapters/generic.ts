@@ -24,7 +24,7 @@ export const genericAdapter: Adapter = {
     if (!header.startsWith(SIG_PREFIX)) return { ok: false, reason: 'wrong scheme' };
     const provided = header.slice(SIG_PREFIX.length);
 
-    const aes = expectSecretShape(source.secretMaterial as never, 'aes');
+    const aes = expectSecretShape(source.secretMaterial, 'aes');
     const secret = decryptSecret(aes);
     const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
 

@@ -31,7 +31,7 @@ export const sentryAdapter: Adapter = {
     const provided = headers.get('sentry-hook-signature');
     if (!provided) return { ok: false, reason: 'missing Sentry-Hook-Signature' };
 
-    const aes = expectSecretShape(source.secretMaterial as never, 'aes');
+    const aes = expectSecretShape(source.secretMaterial, 'aes');
     const secret = decryptSecret(aes);
     const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
 

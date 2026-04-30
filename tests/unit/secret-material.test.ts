@@ -4,6 +4,8 @@ import {
   decryptSecret,
   hashBearer,
   compareBearer,
+  expectSecretShape,
+  type SecretMaterial,
 } from '@/lib/ingest/secret-material';
 
 describe('AES-256-GCM round-trip', () => {
@@ -49,5 +51,40 @@ describe('bcrypt bearer round-trip', () => {
   test('compareBearer is timing-safe (string comparison delegated to bcrypt)', async () => {
     const hashed = await hashBearer('hunter2');
     expect(await compareBearer('', hashed)).toBe(false);
+  });
+});
+
+describe('expectSecretShape — zod validation', () => {
+  test('aes shape with missing iv throws', () => {
+    expect(() =>
+      expectSecretShape({ kind: 'aes', ciphertext: 'a', authTag: 'b' } as unknown as SecretMaterial, 'aes'),
+    ).toThrow();
+  });
+
+  test('bcrypt shape with missing hash throws', () => {
+    expect(() =>
+      expectSecretShape({ kind: 'bcrypt' } as unknown as SecretMaterial, 'bcrypt'),
+    ).toThrow();
+  });
+
+  test('arbitrary unknown jsonb throws', () => {
+    expect(() => expectSecretShape({ random: 'junk' } as unknown as SecretMaterial, 'aes')).toThrow();
+    expect(() => expectSecretShape(null as unknown as SecretMaterial, 'aes')).toThrow();
+    expect(() => expectSecretShape('plain string' as unknown as SecretMaterial, 'aes')).toThrow();
+  });
+
+  test('valid aes shape passes through', () => {
+    const enc = encryptSecret('secret');
+    expect(expectSecretShape(enc, 'aes')).toStrictEqual(enc);
+  });
+
+  test('valid bcrypt shape passes through', async () => {
+    const hashed = await hashBearer('secret');
+    expect(expectSecretShape(hashed, 'bcrypt')).toStrictEqual(hashed);
+  });
+
+  test('aes asked for bcrypt throws', () => {
+    const enc = encryptSecret('secret');
+    expect(() => expectSecretShape(enc, 'bcrypt')).toThrow();
   });
 });

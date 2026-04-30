@@ -3,6 +3,7 @@ import { useTestDb, getTestDb } from '../setup/withTx';
 import { provisionUserOnSignIn } from '@/lib/auth/provision';
 import { teams } from '@/lib/db/schema/teams';
 import { teamMemberships } from '@/lib/db/schema/team-memberships';
+import { services } from '@/lib/db/schema/services';
 import {
   listWebhookSourcesForTeam,
   findWebhookSourceById,
@@ -240,5 +241,40 @@ describe('webhook-sources queries', () => {
     await expect(deleteWebhookSource(db, alice.id, source.id)).rejects.toBeInstanceOf(
       ForbiddenError,
     );
+  });
+
+  test('createWebhookSource rejects defaultServiceId from another team', async () => {
+    const db = getTestDb();
+    const [otherTeamService] = await db
+      .insert(services)
+      .values({ teamId: otherTeamId, name: 'OtherTeamSvc', slug: 'other-team-svc' })
+      .returning();
+    if (!otherTeamService) throw new Error('service');
+    await expect(
+      createWebhookSource(db, admin.id, {
+        teamId, // Platform team
+        type: 'generic',
+        name: 'cross-team',
+        defaultSeverity: 'SEV3',
+        defaultServiceId: otherTeamService.id, // Search team service
+      }),
+    ).rejects.toThrow(/team/i);
+  });
+
+  test('createWebhookSource accepts defaultServiceId from the same team', async () => {
+    const db = getTestDb();
+    const [sameTeamService] = await db
+      .insert(services)
+      .values({ teamId, name: 'SameTeamSvc', slug: 'same-team-svc' })
+      .returning();
+    if (!sameTeamService) throw new Error('service');
+    const { source } = await createWebhookSource(db, admin.id, {
+      teamId,
+      type: 'generic',
+      name: 'same-team',
+      defaultSeverity: 'SEV3',
+      defaultServiceId: sameTeamService.id,
+    });
+    expect(source.defaultServiceId).toBe(sameTeamService.id);
   });
 });
