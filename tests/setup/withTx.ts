@@ -25,6 +25,7 @@ const TABLES = [
   'incidents',
   'dead_letter_webhooks',
   'webhook_sources',
+  'status_snapshots',
   'runbooks',
   'services',
   'team_memberships',
