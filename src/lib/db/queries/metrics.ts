@@ -112,12 +112,12 @@ export async function listAcknowledgedIncidentsInRange(
   const scope = await teamScope(db, actorUserId, range.teamId);
   if (scope.kind === 'none') return [];
 
-  const ackSubquery = sql<Date>`(
-    SELECT MIN(${timelineEvents.occurredAt}) FROM ${timelineEvents}
-    WHERE ${timelineEvents.incidentId} = ${incidents.id}
-      AND ${timelineEvents.kind} = 'status_change'
-      AND ${timelineEvents.body}->>'from' = 'triaging'
-      AND ${timelineEvents.body}->>'to' <> 'triaging'
+  const ackSubquery = sql<string | null>`(
+    SELECT MIN(te.occurred_at) FROM timeline_events te
+    WHERE te.incident_id = incidents.id
+      AND te.kind = 'status_change'
+      AND te.body->>'from' = 'triaging'
+      AND te.body->>'to' <> 'triaging'
   )`;
 
   const conditions = [
@@ -143,7 +143,7 @@ export async function listAcknowledgedIncidentsInRange(
   return rows.map((r) => ({
     incidentId: r.incidentId,
     declaredAt: r.declaredAt,
-    acknowledgedAt: r.acknowledgedAt ?? null,
+    acknowledgedAt: r.acknowledgedAt != null ? new Date(r.acknowledgedAt) : null,
   }));
 }
 
