@@ -33,4 +33,14 @@ describe('IncidentUpdatePayloadSchema', () => {
       }),
     ).toThrow();
   });
+
+  it('accepts status_update_published kind', () => {
+    const parsed = IncidentUpdatePayloadSchema.parse({
+      incidentId: '11111111-1111-4111-8111-111111111111',
+      eventId: '22222222-2222-4222-8222-222222222222',
+      kind: 'status_update_published',
+      occurredAt: '2026-04-29T12:00:00.000Z',
+    });
+    expect(parsed.kind).toBe('status_update_published');
+  });
 });
