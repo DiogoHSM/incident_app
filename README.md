@@ -305,15 +305,6 @@ A list of code-review findings deferred to a v1.1 cleanup pass lives at [`.claud
 
 Address these before any production rollout.
 
-## License suggestion
+## License
 
-If your goal is "free to use, modify, and share" with minimal friction and no commercial restriction, use the **MIT License**.
-
-Why MIT is a strong fit here:
-
-- Very permissive and widely understood.
-- Allows personal, educational, and commercial use.
-- Keeps attribution/disclaimer requirements simple.
-- Maximizes adoption and contributions.
-
-If you want to waive even more rights and push this close to public domain, consider **CC0-1.0** instead.
+MIT — see [`LICENSE`](LICENSE).
