@@ -183,6 +183,7 @@ export function IncidentLiveProvider({
     es.addEventListener('role_change', handleEvent('role_change'));
     es.addEventListener('postmortem_link', handleEvent('postmortem_link'));
     es.addEventListener('webhook', handleEvent('webhook'));
+    es.addEventListener('status_update_published', handleEvent('status_update_published'));
 
     es.addEventListener('error', () => {
       setConnection('reconnecting');

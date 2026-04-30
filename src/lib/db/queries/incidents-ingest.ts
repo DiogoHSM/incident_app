@@ -14,6 +14,8 @@ import { TimelineEventBodySchema } from '@/lib/timeline/body';
 import { generateIncidentSlug } from '@/lib/incidents/slug';
 import { notifyIncidentUpdate } from '@/lib/realtime/notify';
 import { requireTeamMember, ForbiddenError } from '@/lib/authz';
+import { recomputeAllSnapshotsForTeam } from '@/lib/db/queries/status-snapshot';
+import { notifySnapshotUpdated } from '@/lib/realtime/notify-snapshot';
 
 function bumpSeverity(current: Severity): Severity | null {
   if (current === 'SEV1') return null;
@@ -307,6 +309,12 @@ export async function dismissTriagingIncident(
       kind: 'status_change',
       occurredAt: event.occurredAt.toISOString(),
     });
+
+    // Plan 7: keep /status snapshots fresh whenever an incident exits 'triaging'
+    // (resolved-as-false-positive). public + team scopes both refresh.
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, current.teamId);
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: current.teamId });
 
     return { incident: updated, event };
   });

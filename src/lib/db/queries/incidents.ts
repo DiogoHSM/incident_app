@@ -14,6 +14,8 @@ import { generateIncidentSlug } from '@/lib/incidents/slug';
 import { timelineEvents } from '@/lib/db/schema/timeline';
 import { TimelineEventBodySchema, type IncidentRole } from '@/lib/timeline/body';
 import { notifyIncidentUpdate } from '@/lib/realtime/notify';
+import { recomputeAllSnapshotsForTeam } from '@/lib/db/queries/status-snapshot';
+import { notifySnapshotUpdated } from '@/lib/realtime/notify-snapshot';
 
 export interface DeclareIncidentInput {
   teamId: string;
@@ -65,6 +67,9 @@ export async function declareIncident(
           input.affectedServiceIds.map((sid) => ({ incidentId: incident!.id, serviceId: sid })),
         );
     }
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, input.teamId);
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: input.teamId });
     return incident;
   });
 }
@@ -311,6 +316,10 @@ export async function changeIncidentStatus(
       occurredAt: statusEvent.occurredAt.toISOString(),
     });
 
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, current.teamId);
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: current.teamId });
+
     return { incident: updated, statusEvent };
   });
 }
@@ -379,6 +388,62 @@ export async function assignIncidentRole(
     });
 
     return { incident: updated, event };
+  });
+}
+
+export async function postPublicStatusUpdate(
+  db: DB,
+  actorUserId: string,
+  incidentId: string,
+  message: string,
+): Promise<typeof timelineEvents.$inferSelect> {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(incidents)
+      .where(eq(incidents.id, incidentId))
+      .limit(1);
+    if (!current) throw new Error('Incident not found');
+
+    const user = await findUserById(tx as unknown as DB, actorUserId);
+    if (!user) throw new ForbiddenError('Unknown user');
+    const isAdmin = user.role === 'admin';
+    const hasRole =
+      current.icUserId === actorUserId ||
+      current.scribeUserId === actorUserId ||
+      current.commsUserId === actorUserId;
+    if (!isAdmin && !hasRole) {
+      throw new ForbiddenError('Only IC/Scribe/Comms or admin can post public updates');
+    }
+
+    const body = TimelineEventBodySchema.parse({
+      kind: 'status_update_published',
+      message,
+      postedToScope: 'public',
+    });
+
+    const [event] = await tx
+      .insert(timelineEvents)
+      .values({
+        incidentId,
+        authorUserId: actorUserId,
+        kind: 'status_update_published',
+        body,
+      })
+      .returning();
+    if (!event) throw new Error('Insert returned no rows');
+
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, current.teamId);
+    await notifyIncidentUpdate(tx as unknown as DB, {
+      incidentId: event.incidentId,
+      eventId: event.id,
+      kind: 'status_update_published',
+      occurredAt: event.occurredAt.toISOString(),
+    });
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: current.teamId });
+
+    return event;
   });
 }
 

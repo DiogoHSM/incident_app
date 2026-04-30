@@ -173,6 +173,18 @@ function TimelineBodyView({
       </div>
     );
   }
+  if (event.kind === 'status_update_published') {
+    const body = event.body as { message: string; postedToScope: 'public' | 'team' };
+    return (
+      <p className="text-neutral-700">
+        <span aria-hidden>🔔 </span>
+        <span className="mr-2 inline-block rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-blue-900">
+          Public update
+        </span>
+        <span className="whitespace-pre-wrap">{body.message}</span>
+      </p>
+    );
+  }
   // postmortem_link
   return (
     <p className="text-neutral-700">

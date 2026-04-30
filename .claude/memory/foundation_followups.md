@@ -71,7 +71,7 @@ Items flagged during Plan 4 code reviews and intentionally deferred:
 
 4. **Stronger optimistic-note dedup than markdown match.** Current reconciliation in `IncidentLiveProvider.reconcileOptimistic` matches by `body.markdown === optimistic.markdown`. If two users post identical text simultaneously, the wrong optimistic entry can be replaced. Fix is a client-generated correlation token threaded through `addNoteAction` and the NOTIFY payload. Skip until the failure is observed.
 
-5. **Edge-cached status page invalidation via the same `incident_updates` channel.** Plan 9 (status page) will subscribe to the same channel for ISR cache busting.
+5. ~~**Edge-cached status page invalidation via the same `incident_updates` channel.**~~ — **DONE in Plan 7** via a SEPARATE `status_snapshot_updated` channel (the `incident_updates` channel stays per-incident; the snapshot channel is per-scope and decoupled from war-room subscribers). v1 relies on Next ISR (`revalidate=15`) for the actual cache freshness; the channel exists as a forward-looking hook for Plan 9+ to wire `revalidatePath('/status')` from a long-lived listener.
 
 6. **`relativeTime` ticks once per render, not on a timer.** A note posted 30 s ago will keep saying "just now" until something else triggers a re-render of `Timeline`. With SSE/heartbeat traffic re-rendering happens implicitly within tens of seconds, but a quiet incident could go stale-looking. Optional: add a 30 s interval that bumps a render token. Defer until the UX gap is observed.
 
@@ -105,7 +105,7 @@ Items flagged during Plan 5 final code review (post-merge) and intentionally def
 
 11. **Action item `external_url` validation only at action layer.** `createActionItem`/`updateActionItem` accept any string for `externalUrl`. Action-layer zod parse gates it at the UI boundary. A future seed script or admin tool calling the queries directly would need to validate URLs itself.
 
-12. **Postmortem visibility on /status page.** Plan 5 stores the `public_on_status_page` flag; Plan 7 (status page) consumes it.
+12. ~~**Postmortem visibility on /status page.**~~ — **DONE in Plan 7**. `listPublicPostmortems` and `findPublicPostmortemById` consume the `public_on_status_page` flag; the public postmortem read view lives at `/status/postmortems/[id]` and 404s when the flag is false or `status != 'published'`.
 
 ## Plan 6 follow-ups
 
@@ -134,3 +134,23 @@ Items flagged during Plan 6 final code review and intentionally deferred:
 11. **`webhook_sources.default_service_id` ON DELETE SET NULL** — when a service is deleted, the webhook source silently loses its fallback. UI should warn the operator on delete; today it just orphans the column.
 
 12. **No test for the dispatcher's webhook round-trip in isolation** if the test team has zero services + the source has a default_service_id pointing to a soft-deleted row. Edge case worth a regression test.
+
+## Plan 7 follow-ups
+
+Items flagged during Plan 7 final code review and intentionally deferred:
+
+1. **Real-time `revalidatePath('/status')` from a listener.** v1 uses ISR=15. Plan 9+ should wire the existing `notifySnapshotUpdated` channel into a long-lived listener that calls `revalidatePath` on every notify so /status updates without the 15 s lag.
+
+2. **Cross-team incident snapshot recompute.** When an incident's `incident_services` rows touch services from MULTIPLE teams, `recomputeAllSnapshotsForTeam(tx, teamId)` only refreshes the primary team's snapshot + public. Other teams whose services are also affected lag until their next mutation. Resolve by computing the affected-team set from the join and refreshing each.
+
+3. **Per-day worst-severity heatmap precomputation.** The 7-day bars are recomputed from raw incident rows on every snapshot write. A materialized view or a cached column would cut DB work for high-volume orgs. v1 is fine; revisit at scale.
+
+4. **`/status/incidents/[slug]` direct read instead of via the snapshot.** Single-incident traffic doesn't justify a denormalized row. If we ever need real-time updates for this specific page (vs. the 15 s ISR), wire it through the `incident_updates` channel — but for v1 the trade-off is acceptable.
+
+5. **`PublicUpdateForm` has no optimistic insert.** Per spec §8.1, public updates are not optimistic. UI uses `useTransition` for the pending state but the message doesn't show in the timeline until the SSE event arrives. If operators complain about the lag, revisit — but introducing optimism here also requires reconcile-on-error UX.
+
+6. **Maintenance fallback wiring.** `/status/maintenance` is pre-rendered but nothing routes to it on DB failure. Production deploy needs a Vercel rewrite or 50x → /status/maintenance. Out of scope for this plan; deployment-time work.
+
+7. **Snapshot `loadBuilderInputs` does N+1 queries** for `compute30dUptime` (one per service). For ~10 services this is fine; at 100+ services it warrants a single query that aggregates the durations server-side. Defer.
+
+8. **`findPublicIncidentBySlug` returns ALL incidents by slug, not just public ones.** The slug itself is the access token (it's how the `/status/incidents/<slug>` link is shared). If a team wants stricter "show on /status" gating per incident, add an `is_public` flag on incidents. v1: anyone who knows the slug can see the public-update timeline.

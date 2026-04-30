@@ -206,4 +206,54 @@ describe('TimelineEventBodySchema', () => {
       }),
     ).toThrow();
   });
+
+  test('status_update_published — message + scope present', () => {
+    expect(
+      TimelineEventBodySchema.parse({
+        kind: 'status_update_published',
+        message: 'We are investigating elevated 500s on /v1/login.',
+        postedToScope: 'public',
+      }),
+    ).toMatchObject({ kind: 'status_update_published', postedToScope: 'public' });
+  });
+
+  test('status_update_published — team scope', () => {
+    expect(
+      TimelineEventBodySchema.parse({
+        kind: 'status_update_published',
+        message: 'Restoring partial traffic.',
+        postedToScope: 'team',
+      }),
+    ).toMatchObject({ kind: 'status_update_published', postedToScope: 'team' });
+  });
+
+  test('status_update_published rejects empty message', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'status_update_published',
+        message: '',
+        postedToScope: 'public',
+      }),
+    ).toThrow();
+  });
+
+  test('status_update_published rejects message over 5000 chars', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'status_update_published',
+        message: 'x'.repeat(5001),
+        postedToScope: 'public',
+      }),
+    ).toThrow();
+  });
+
+  test('status_update_published rejects unknown scope', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'status_update_published',
+        message: 'hi',
+        postedToScope: 'planet',
+      }),
+    ).toThrow();
+  });
 });
