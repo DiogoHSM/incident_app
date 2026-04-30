@@ -1,0 +1,9 @@
+{
+  "alert_id": "1234567890",
+  "alert_type": "error",
+  "alert_title": "[Triggered] CPU usage > 90% on api-prod-3",
+  "alert_transition": "Triggered",
+  "monitor": { "id": "987654321" },
+  "tags": "service:api,env:prod,host:api-prod-3",
+  "link": "https://app.datadoghq.com/event/1234567890"
+}
