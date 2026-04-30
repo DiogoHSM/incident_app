@@ -16,7 +16,7 @@ const schema = z
     ADMIN_EMAILS: adminEmailsSchema,
     AUTH_SECRET: z.string().min(32),
     AUTH_URL: z.string().url(),
-    AUTH_PROVIDER: z.enum(['google']),
+    AUTH_PROVIDER: z.enum(['google', 'dev']),
     AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
     AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
     WEBHOOK_SECRET_ENCRYPTION_KEY: z
