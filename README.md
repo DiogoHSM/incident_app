@@ -2,6 +2,8 @@
 
 Web-first incident coordination tool for a single org with multiple teams. Declare incidents, run a war-room with a live timeline, ingest alerts from Sentry / Datadog / Grafana, publish a customer-facing status page, write postmortems, and look at MTTR / MTTA / frequency dashboards — all in one Next.js app backed by Postgres.
 
+> **New here?** Read the [**User Guide**](USER-GUIDE.md) first — it walks through the day-to-day flow, the roles, and how each step works (with diagrams). The rest of this README is for developers and operators.
+
 Full design spec: [`docs/superpowers/specs/2026-04-28-incident-tracker-design.md`](docs/superpowers/specs/2026-04-28-incident-tracker-design.md). Per-phase implementation plans live under [`docs/superpowers/plans/`](docs/superpowers/plans/).
 
 ## Stack
