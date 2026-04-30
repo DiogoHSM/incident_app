@@ -14,6 +14,8 @@ import { generateIncidentSlug } from '@/lib/incidents/slug';
 import { timelineEvents } from '@/lib/db/schema/timeline';
 import { TimelineEventBodySchema, type IncidentRole } from '@/lib/timeline/body';
 import { notifyIncidentUpdate } from '@/lib/realtime/notify';
+import { recomputeAllSnapshotsForTeam } from '@/lib/db/queries/status-snapshot';
+import { notifySnapshotUpdated } from '@/lib/realtime/notify-snapshot';
 
 export interface DeclareIncidentInput {
   teamId: string;
@@ -65,6 +67,9 @@ export async function declareIncident(
           input.affectedServiceIds.map((sid) => ({ incidentId: incident!.id, serviceId: sid })),
         );
     }
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, input.teamId);
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: input.teamId });
     return incident;
   });
 }
@@ -310,6 +315,10 @@ export async function changeIncidentStatus(
       kind: 'status_change',
       occurredAt: statusEvent.occurredAt.toISOString(),
     });
+
+    await recomputeAllSnapshotsForTeam(tx as unknown as DB, current.teamId);
+    await notifySnapshotUpdated(tx as unknown as DB, 'public');
+    await notifySnapshotUpdated(tx as unknown as DB, { type: 'team', teamId: current.teamId });
 
     return { incident: updated, statusEvent };
   });
