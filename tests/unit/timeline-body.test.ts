@@ -223,8 +223,8 @@ describe('TimelineEventBodySchema', () => {
         kind: 'status_update_published',
         message: 'Restoring partial traffic.',
         postedToScope: 'team',
-      }).postedToScope,
-    ).toBe('team');
+      }),
+    ).toMatchObject({ kind: 'status_update_published', postedToScope: 'team' });
   });
 
   test('status_update_published rejects empty message', () => {
