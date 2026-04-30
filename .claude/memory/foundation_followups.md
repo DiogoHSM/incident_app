@@ -106,3 +106,31 @@ Items flagged during Plan 5 final code review (post-merge) and intentionally def
 11. **Action item `external_url` validation only at action layer.** `createActionItem`/`updateActionItem` accept any string for `externalUrl`. Action-layer zod parse gates it at the UI boundary. A future seed script or admin tool calling the queries directly would need to validate URLs itself.
 
 12. **Postmortem visibility on /status page.** Plan 5 stores the `public_on_status_page` flag; Plan 7 (status page) consumes it.
+
+## Plan 6 follow-ups
+
+Items flagged during Plan 6 final code review and intentionally deferred:
+
+1. **Manual replay UI for `dead_letter_webhooks`.** Operators can `SELECT` the table directly in v1; a "Replay" button that re-fires ingest with the original headers + body is deferred to v1.1. The data is already preserved.
+
+2. **Per-source rate limiting on `POST /api/webhooks/[sourceId]`.** No upstream rate limit. Sentry/Datadog/Grafana cap their own outbound burst; a bursty generic source could overwhelm us. Add a token bucket per `sourceId` when needed.
+
+3. **Webhook payload size cap.** The route reads `req.text()` without a size guard. Provider payloads are typically <10 KB; a malicious caller could blast a megabyte. Add `if (rawBody.length > 256_000) return 413` early in the handler.
+
+4. **`secret-material` AES key rotation.** No mechanism exists to re-encrypt existing rows when `WEBHOOK_SECRET_ENCRYPTION_KEY` is rotated. v1.1 should ship a `pnpm db:rotate-webhook-keys` script that re-encrypts under the new key.
+
+5. **Sentry "alerts" webhook variant.** Spec §7.2 only documents the issue-alert shape (fingerprint = `issue.id`). Sentry also has a "metric alert" webhook with a different envelope; v1 doesn't handle it. Operators must currently configure issue-alerts only.
+
+6. **Datadog tag parsing is naive.** `extractServiceSlugs` does a simple string split on commas; if a tag value itself contains a comma (Datadog allows it for some integrations) the slug is wrong. Replace with the documented Datadog tag escape rules when an operator hits the bug.
+
+7. **Grafana service label fallback.** Currently uses `labels.service` only. Some teams use `labels.app` or `labels.namespace`; a configurable mapping per source would help. Defer until requested.
+
+8. **Auto-promote demote.** Spec §7.3 explicitly forbids it. If a v1.1 user requests "auto-clear severity bump after the incident has been quiet for X minutes", treat as a new feature with its own ADR.
+
+9. **Route-handler integration tests use a synthetic `Request` object** — no `next/server` middleware runs. The real route runs through Next's middleware (auth gate is bypassed for `/api/webhooks/*` already). Verify the bypass in `src/middleware.ts` matchers is set correctly: webhooks should NOT require a session.
+
+10. **Settings page secret reveal cookie has a fallback failure mode.** If the user closes the modal before navigator.clipboard succeeded and the cookie has already been cleared by the page's `cookies().delete(...)` call, they can't get the secret back. Recovery: rotate. Documented but not addressed.
+
+11. **`webhook_sources.default_service_id` ON DELETE SET NULL** — when a service is deleted, the webhook source silently loses its fallback. UI should warn the operator on delete; today it just orphans the column.
+
+12. **No test for the dispatcher's webhook round-trip in isolation** if the test team has zero services + the source has a default_service_id pointing to a soft-deleted row. Edge case worth a regression test.
