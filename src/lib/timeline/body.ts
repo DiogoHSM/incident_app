@@ -51,6 +51,12 @@ const WebhookBody = z.object({
   summary: z.string().max(1_000).optional(),
 });
 
+const StatusUpdatePublishedBody = z.object({
+  kind: z.literal('status_update_published'),
+  message: z.string().min(1).max(5_000),
+  postedToScope: z.enum(['public', 'team']),
+});
+
 export const TimelineEventBodySchema = z.discriminatedUnion('kind', [
   NoteBody,
   StatusChangeBody,
@@ -58,6 +64,7 @@ export const TimelineEventBodySchema = z.discriminatedUnion('kind', [
   RoleChangeBody,
   PostmortemLinkBody,
   WebhookBody,
+  StatusUpdatePublishedBody,
 ]);
 
 export type TimelineEventBody = z.infer<typeof TimelineEventBodySchema>;
