@@ -18,6 +18,7 @@ import { StatusControl } from './_components/StatusControl';
 import { SeverityControl } from './_components/SeverityControl';
 import { RolePickers } from './_components/RolePickers';
 import { PostmortemTrigger } from './_components/PostmortemTrigger';
+import { PublicUpdateForm } from './_components/PublicUpdateForm';
 
 function durationLabel(start: Date, end: Date | null): string {
   const ms = (end ?? new Date()).getTime() - start.getTime();
@@ -43,6 +44,12 @@ export default async function IncidentDetailPage({
   if (!found) notFound();
   const { incident, affectedServices } = found;
   const userId = session.user.id;
+  const userIsAdmin = session.user.role === 'admin';
+  const userHoldsRole =
+    incident.icUserId === userId ||
+    incident.scribeUserId === userId ||
+    incident.commsUserId === userId;
+  const canPostPublicUpdate = userIsAdmin || userHoldsRole;
 
   const [runbooks, teamMembers, events] = await Promise.all([
     Promise.all(
@@ -148,6 +155,13 @@ export default async function IncidentDetailPage({
           <h2 className="mb-2 text-sm font-medium text-neutral-700">Postmortem</h2>
           <PostmortemTrigger slug={incident.publicSlug} />
         </section>
+
+        {canPostPublicUpdate ? (
+          <section className="rounded border border-neutral-200 bg-white p-4">
+            <h2 className="mb-2 text-sm font-medium text-zinc-500">Public update</h2>
+            <PublicUpdateForm slug={incident.publicSlug} />
+          </section>
+        ) : null}
 
         <section className="rounded border border-neutral-200 bg-white p-4">
           <h2 className="mb-2 text-sm font-medium text-neutral-700">Affected services</h2>

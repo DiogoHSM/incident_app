@@ -11,6 +11,7 @@ import {
   assignIncidentRole,
 } from '@/lib/db/queries/incidents';
 import { dismissTriagingIncident } from '@/lib/db/queries/incidents-ingest';
+import { postPublicStatusUpdate } from '@/lib/db/queries/incidents';
 import { appendNote } from '@/lib/db/queries/timeline';
 import { INCIDENT_STATUS_VALUES } from '@/lib/db/schema/incidents';
 import { SEVERITY_VALUES } from '@/lib/db/schema/services';
@@ -110,6 +111,34 @@ export async function assignRoleAction(formData: FormData): Promise<void> {
   const incidentId = await resolveIncidentIdOrThrow(parsed.slug, session.user.id);
   await assignIncidentRole(db, session.user.id, incidentId, parsed.role, parsed.toUserId);
   revalidatePath(`/incidents/${parsed.slug}`);
+}
+
+const PublicUpdateSchema = z.object({
+  message: z.string().min(1).max(5_000),
+});
+
+export async function postPublicUpdateAction(
+  slug: string,
+  formData: FormData,
+): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('Unauthorized');
+  const found = await findIncidentBySlugForUser(db, session.user.id, slug);
+  if (!found) throw new Error('Incident not found');
+
+  const parsed = PublicUpdateSchema.parse({
+    message: formData.get('message'),
+  });
+
+  await postPublicStatusUpdate(
+    db,
+    session.user.id,
+    found.incident.id,
+    parsed.message,
+  );
+  revalidatePath(`/incidents/${slug}`);
+  revalidatePath(`/status`);
+  revalidatePath(`/status/incidents/${slug}`);
 }
 
 export async function dismissTriagingIncidentAction(formData: FormData): Promise<void> {
