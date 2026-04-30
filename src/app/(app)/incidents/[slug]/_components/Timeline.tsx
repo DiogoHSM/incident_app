@@ -107,7 +107,14 @@ function TimelineBodyView({
     );
   }
   if (event.kind === 'status_change') {
-    const body = event.body as { from: string; to: string; reason?: string };
+    const body = event.body as { from: string; to: string; reason?: string; dismissed?: boolean };
+    if (body.dismissed) {
+      return (
+        <p className="text-neutral-700">
+          Dismissed as false positive (triaging → resolved)
+        </p>
+      );
+    }
     return (
       <p className="text-neutral-700">
         Status: <code>{body.from}</code> → <code>{body.to}</code>
@@ -137,6 +144,33 @@ function TimelineBodyView({
       <p className="text-neutral-700">
         {body.role.toUpperCase()}: {fromName} → {toName}
       </p>
+    );
+  }
+  if (event.kind === 'webhook') {
+    const body = event.body as {
+      sourceName: string;
+      sourceType: string;
+      fingerprint: string;
+      sourceUrl?: string;
+      summary?: string;
+    };
+    return (
+      <div className="text-sm">
+        <span className="font-medium">{body.sourceName}</span>
+        <span className="text-gray-500"> ({body.sourceType})</span>
+        {body.summary && <span>: {body.summary}</span>}
+        <div className="text-xs text-gray-500 mt-0.5">
+          fingerprint: <code>{body.fingerprint}</code>
+          {body.sourceUrl && (
+            <>
+              {' · '}
+              <a href={body.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                open in {body.sourceType}
+              </a>
+            </>
+          )}
+        </div>
+      </div>
     );
   }
   // postmortem_link

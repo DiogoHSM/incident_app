@@ -1,0 +1,13 @@
+{
+  "receiver": "incident-app",
+  "status": "firing",
+  "alerts": [
+    {
+      "fingerprint": "alert-uid-aaa111",
+      "status": "firing",
+      "labels": { "alertname": "HighErrorRate", "service": "checkout" },
+      "annotations": { "summary": "Error rate above 5%" },
+      "generatorURL": "https://grafana.example.com/alerting/list?ruleUID=alert-uid-aaa111"
+    }
+  ]
+}

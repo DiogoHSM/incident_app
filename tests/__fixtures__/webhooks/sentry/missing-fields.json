@@ -1,0 +1,11 @@
+{
+  "action": "resolved",
+  "data": {
+    "issue": {
+      "id": "xyz789",
+      "title": "Worker pool starvation",
+      "permalink": "https://sentry.io/organizations/acme/issues/xyz789/",
+      "project": { "slug": "worker" }
+    }
+  }
+}

@@ -10,6 +10,7 @@ import {
   changeIncidentStatus,
   assignIncidentRole,
 } from '@/lib/db/queries/incidents';
+import { dismissTriagingIncident } from '@/lib/db/queries/incidents-ingest';
 import { appendNote } from '@/lib/db/queries/timeline';
 import { INCIDENT_STATUS_VALUES } from '@/lib/db/schema/incidents';
 import { SEVERITY_VALUES } from '@/lib/db/schema/services';
@@ -109,4 +110,14 @@ export async function assignRoleAction(formData: FormData): Promise<void> {
   const incidentId = await resolveIncidentIdOrThrow(parsed.slug, session.user.id);
   await assignIncidentRole(db, session.user.id, incidentId, parsed.role, parsed.toUserId);
   revalidatePath(`/incidents/${parsed.slug}`);
+}
+
+export async function dismissTriagingIncidentAction(formData: FormData): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('not authenticated');
+  const incidentId = z.string().uuid().parse(formData.get('incidentId'));
+  const slug = z.string().min(1).parse(formData.get('slug'));
+  await dismissTriagingIncident(db, session.user.id, incidentId);
+  revalidatePath(`/incidents/${slug}`);
+  revalidatePath('/incidents');
 }

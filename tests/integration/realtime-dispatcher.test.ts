@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import {
   createRealtimeDispatcher,
   type RealtimeDispatcher,
@@ -15,6 +16,8 @@ import {
   changeIncidentStatus,
   declareIncident,
 } from '@/lib/db/queries/incidents';
+import { ingestWebhookAlert } from '@/lib/db/queries/incidents-ingest';
+import { createWebhookSource } from '@/lib/db/queries/webhook-sources';
 
 interface World {
   actorId: string;
@@ -151,5 +154,69 @@ describe('RealtimeDispatcher (integration)', () => {
     await appendNote(getTestDb(), world.actorId, world.incidentId, 'after unsubscribe');
     await new Promise((r) => setTimeout(r, 500));
     expect(count).toBe(0);
+  });
+
+  it('delivers a webhook event when ingestWebhookAlert creates a new incident', async () => {
+    const db = getTestDb();
+    // createWebhookSource requires admin; promote the world actor for this test.
+    await db
+      .update(users)
+      .set({ role: 'admin' })
+      .where(eq(users.id, world.actorId));
+
+    // Create a webhook source on the world's team.
+    const { source } = await createWebhookSource(db, world.actorId, {
+      teamId: world.teamId,
+      type: 'generic',
+      name: `rt-webhook-${actorCounter}`,
+      defaultSeverity: 'SEV3',
+      defaultServiceId: null,
+      autoPromoteThreshold: 3,
+      autoPromoteWindowSeconds: 600,
+    });
+
+    // Ingest creates a brand-new incident; we capture the incidentId from the result.
+    const result = await ingestWebhookAlert(db, source, {
+      title: 'CPU spike',
+      fingerprint: `fp-dispatcher-${actorCounter}`,
+      severity: 'SEV3',
+      serviceSlugs: [],
+      sourceUrl: null,
+      raw: {},
+    });
+    expect(result.action).toBe('created');
+
+    // Subscribe AFTER creation — the NOTIFY fires inside the ingest transaction,
+    // so we may miss it. Instead, verify the dispatcher delivers the event when
+    // a second webhook alert matches the same incident.
+    const eventPromise = new Promise<TimelineEventOnWire>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        unsub();
+        reject(new Error('timeout waiting for webhook dispatcher event'));
+      }, 5_000);
+      const unsub = dispatcher!.subscribe(result.incidentId, (evt) => {
+        clearTimeout(timer);
+        unsub();
+        resolve(evt);
+      });
+    });
+
+    // Second ingest hits the match path → fires pg_notify for the existing incident.
+    await ingestWebhookAlert(db, source, {
+      title: 'CPU spike (repeat)',
+      fingerprint: `fp-dispatcher-${actorCounter}`,
+      severity: 'SEV3',
+      serviceSlugs: [],
+      sourceUrl: null,
+      raw: {},
+    });
+
+    const evt = await eventPromise;
+    expect(evt.kind).toBe('webhook');
+    expect(evt.incidentId).toBe(result.incidentId);
+    expect((evt.body as { sourceName: string }).sourceName).toBe(`rt-webhook-${actorCounter}`);
+    expect((evt.body as { fingerprint: string }).fingerprint).toBe(
+      `fp-dispatcher-${actorCounter}`,
+    );
   });
 });

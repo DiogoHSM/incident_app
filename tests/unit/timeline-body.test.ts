@@ -122,4 +122,88 @@ describe('TimelineEventBodySchema', () => {
       TimelineEventBodySchema.parse({ kind: 'postmortem_link' }),
     ).toThrow();
   });
+
+  test('webhook shape — required fields parse', () => {
+    expect(
+      TimelineEventBodySchema.parse({
+        kind: 'webhook',
+        sourceId: '11111111-1111-4111-8111-111111111111',
+        sourceType: 'sentry',
+        sourceName: 'sentry-prod',
+        fingerprint: 'issue-abc123',
+      }),
+    ).toMatchObject({ kind: 'webhook', sourceType: 'sentry' });
+  });
+
+  test('webhook shape — optional sourceUrl + summary parse', () => {
+    const parsed = TimelineEventBodySchema.parse({
+      kind: 'webhook',
+      sourceId: '11111111-1111-4111-8111-111111111111',
+      sourceType: 'datadog',
+      sourceName: 'datadog-prod',
+      fingerprint: 'alert-1:monitor-2',
+      sourceUrl: 'https://app.datadoghq.com/event/1',
+      summary: 'CPU > 90%',
+    });
+    expect(parsed).toMatchObject({ sourceUrl: 'https://app.datadoghq.com/event/1' });
+  });
+
+  test('webhook rejects unknown sourceType', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'webhook',
+        sourceId: '11111111-1111-4111-8111-111111111111',
+        sourceType: 'pagerduty',
+        sourceName: 'pd',
+        fingerprint: 'x',
+      }),
+    ).toThrow();
+  });
+
+  test('webhook rejects empty fingerprint', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'webhook',
+        sourceId: '11111111-1111-4111-8111-111111111111',
+        sourceType: 'generic',
+        sourceName: 'g',
+        fingerprint: '',
+      }),
+    ).toThrow();
+  });
+
+  test('webhook rejects malformed sourceUrl', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'webhook',
+        sourceId: '11111111-1111-4111-8111-111111111111',
+        sourceType: 'generic',
+        sourceName: 'g',
+        fingerprint: 'x',
+        sourceUrl: 'not a url',
+      }),
+    ).toThrow();
+  });
+
+  test('status_change accepts optional dismissed:true', () => {
+    expect(
+      TimelineEventBodySchema.parse({
+        kind: 'status_change',
+        from: 'triaging',
+        to: 'resolved',
+        dismissed: true,
+      }),
+    ).toMatchObject({ dismissed: true });
+  });
+
+  test('status_change rejects dismissed when not boolean', () => {
+    expect(() =>
+      TimelineEventBodySchema.parse({
+        kind: 'status_change',
+        from: 'triaging',
+        to: 'resolved',
+        dismissed: 'yes',
+      }),
+    ).toThrow();
+  });
 });

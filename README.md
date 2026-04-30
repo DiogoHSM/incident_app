@@ -95,6 +95,26 @@ After running `pnpm dev` against a real Google OAuth client:
 
 If any step fails, see `.claude/memory/foundation_followups.md` for known v1.1 issues.
 
+### Webhook smoke test
+
+```bash
+# 1. As admin, create a generic webhook source at /settings/webhooks.
+#    Note the displayed secret + URL.
+SOURCE_URL="<copied URL>"
+SECRET="<copied secret>"
+
+# 2. Send a signed payload.
+BODY='{"title":"Smoke test","fingerprint":"smoke-1","severity":"SEV3","services":[]}'
+SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SECRET" -hex | awk '{print $2}')
+curl -sS -X POST -H "Content-Type: application/json" \
+  -H "X-Signature: sha256=$SIG" \
+  -d "$BODY" "$SOURCE_URL"
+
+# 3. Confirm a triaging incident appears at /incidents with the ⚠ unconfirmed tag.
+# 4. Re-send the same payload twice more within 10 minutes; the third should bump severity to SEV2 and emit a severity_change event in the timeline.
+# 5. Click "Dismiss as false positive" on the war-room. Status flips to resolved with a "Dismissed as false positive" line.
+```
+
 ## Deferred follow-ups
 
 A number of code-review issues were intentionally deferred to a v1.1 cleanup pass. They're tracked in `.claude/memory/foundation_followups.md`. The three Plan 2 prereqs flagged by the Plan 1 reviewer (testcontainer scaling, admin-sees-all in services queries, `provisionUserOnSignIn` race) are now resolved in Plan 2; remaining items include: Plan 4 added its own follow-ups (route-handler tests, viewer count widget, retry button on errored optimistic notes) — see `.claude/memory/foundation_followups.md` for the full list.

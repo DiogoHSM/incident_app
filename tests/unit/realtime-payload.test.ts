@@ -17,7 +17,7 @@ describe('IncidentUpdatePayloadSchema', () => {
       IncidentUpdatePayloadSchema.parse({
         incidentId: '11111111-1111-4111-8111-111111111111',
         eventId: '22222222-2222-4222-8222-222222222222',
-        kind: 'webhook',
+        kind: 'not_a_real_kind',
         occurredAt: '2026-04-29T12:00:00.000Z',
       }),
     ).toThrow();
