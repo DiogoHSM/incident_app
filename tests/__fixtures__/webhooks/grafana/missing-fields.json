@@ -1,0 +1,11 @@
+{
+  "receiver": "incident-app",
+  "status": "firing",
+  "alerts": [
+    {
+      "fingerprint": "alert-uid-bbb222",
+      "status": "firing",
+      "labels": { "alertname": "DiskFull" }
+    }
+  ]
+}
