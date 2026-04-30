@@ -44,5 +44,6 @@ next-env.d.ts
 
 # project-specific
 .claude/docs/SECRETS.md
+.claude/scheduled_tasks.lock
 .superpowers/
 .worktrees/

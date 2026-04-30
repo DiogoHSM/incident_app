@@ -1,6 +1,6 @@
 ---
-name: Plan 6 spec deviation — secret_material jsonb instead of secret_hash
-description: Plan 6 (webhooks) intentionally diverges from spec §4.1's `secret_hash` (bcrypt) because HMAC adapters need plaintext at verify time; tracked in Linear PER-38 for sign-off
+name: Plan 6 spec deviation — secret_material jsonb (shipped)
+description: Plan 6 webhooks shipped 2026-04-29 with the secret_material jsonb deviation accepted (PR #1). Spec §4.1 secret_hash is replaced by secret_material in code AND in the spec amendment recorded in the plan.
 type: project
 ---
 
