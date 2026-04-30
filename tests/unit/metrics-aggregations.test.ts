@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   meanDurationMs,
   bucketByDay,
+  bucketKeyFor,
   severityMix,
   serviceHeatmap,
 } from '@/lib/metrics/aggregations';
@@ -154,5 +155,30 @@ describe('serviceHeatmap', () => {
       { serviceId: 'a', serviceName: 'alpha', severity: 'SEV1' as Severity, count: 1 },
     ]);
     expect(out.services.map((s) => s.name)).toEqual(['alpha', 'zeta']);
+  });
+});
+
+describe('bucketKeyFor', () => {
+  test('day bucket: anchors to UTC day start', () => {
+    expect(bucketKeyFor(new Date('2026-04-26T00:00:00Z'), 'day')).toBe('2026-04-26');
+    expect(bucketKeyFor(new Date('2026-04-26T23:59:59Z'), 'day')).toBe('2026-04-26');
+    expect(bucketKeyFor(new Date('2026-04-27T00:00:00Z'), 'day')).toBe('2026-04-27');
+  });
+
+  test('day bucket: distinct dates produce distinct keys', () => {
+    const a = bucketKeyFor(new Date('2026-04-26T05:00:00Z'), 'day');
+    const b = bucketKeyFor(new Date('2026-04-28T05:00:00Z'), 'day');
+    expect(a).not.toBe(b);
+    expect(a).toBe('2026-04-26');
+    expect(b).toBe('2026-04-28');
+  });
+
+  test('week bucket: anchors to ISO Monday', () => {
+    // Wed 2026-04-15 → Mon 2026-04-13
+    expect(bucketKeyFor(new Date('2026-04-15T12:00:00Z'), 'week')).toBe('2026-04-13');
+    // Tue 2026-04-21 → Mon 2026-04-20
+    expect(bucketKeyFor(new Date('2026-04-21T08:00:00Z'), 'week')).toBe('2026-04-20');
+    // Sun 2026-04-26 → Mon 2026-04-20 (same week)
+    expect(bucketKeyFor(new Date('2026-04-26T23:00:00Z'), 'week')).toBe('2026-04-20');
   });
 });

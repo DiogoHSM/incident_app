@@ -11,6 +11,7 @@ import {
 import { parseRange, RangeParseError } from '@/lib/metrics/range';
 import {
   bucketByDay,
+  bucketKeyFor,
   meanDurationMs,
   serviceHeatmap,
   severityMix,
@@ -47,11 +48,7 @@ function meanDurationByBucket(
 
   const sumByDate = new Map<string, { sum: number; n: number }>();
   for (const r of rows) {
-    const key = (() => {
-      const tmp = bucketByDay([{ at: r.bucketAt }], range);
-      return tmp[0]?.date ?? null;
-    })();
-    if (!key) continue;
+    const key = bucketKeyFor(r.bucketAt, range.bucket);
     const d = r.to.getTime() - r.from.getTime();
     if (d <= 0) continue;
     const acc = sumByDate.get(key) ?? { sum: 0, n: 0 };

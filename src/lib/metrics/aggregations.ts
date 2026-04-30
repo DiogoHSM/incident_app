@@ -89,6 +89,18 @@ export function bucketByDay(
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+import type { RangeBucket } from './types';
+
+/**
+ * Compute the bucket-key for a given date under the given bucket granularity.
+ * The key matches the `date` field on `BucketRow` for whichever bucket the
+ * row would land in. Pure; safe in inner loops.
+ */
+export function bucketKeyFor(d: Date, bucket: RangeBucket): string {
+  const anchor = bucket === 'day' ? startOfUtcDay(d) : startOfIsoWeek(d);
+  return utcDayKey(anchor);
+}
+
 export interface SeverityRow {
   severity: Severity;
 }
