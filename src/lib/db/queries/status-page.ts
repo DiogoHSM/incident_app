@@ -59,11 +59,16 @@ export async function findPublicIncidentBySlug(
     status: incident.status,
     declaredAt: incident.declaredAt,
     resolvedAt: incident.resolvedAt,
-    publicUpdates: updateRows.map((r) => ({
-      id: r.id,
-      message: (r.body as { message: string }).message,
-      postedAt: r.occurredAt,
-      author: r.authorName ?? null,
-    })),
+    publicUpdates: updateRows
+      .filter((r) => {
+        const body = r.body as { postedToScope?: 'public' | 'team' };
+        return body.postedToScope === 'public';
+      })
+      .map((r) => ({
+        id: r.id,
+        message: (r.body as { message: string }).message,
+        postedAt: r.occurredAt,
+        author: r.authorName ?? null,
+      })),
   };
 }

@@ -11,6 +11,8 @@ import {
   declareIncident,
   postPublicStatusUpdate,
 } from '@/lib/db/queries/incidents';
+import { recomputeAndPersistSnapshot } from '@/lib/db/queries/status-snapshot';
+import { findPublicIncidentBySlug } from '@/lib/db/queries/status-page';
 import { ForbiddenError } from '@/lib/authz';
 import { eq } from 'drizzle-orm';
 
@@ -24,6 +26,7 @@ describe('postPublicStatusUpdate', () => {
   let outsider: { id: string };
   let teamId: string;
   let incidentId: string;
+  let incidentSlug: string;
 
   beforeEach(async () => {
     const db = getTestDb();
@@ -60,6 +63,7 @@ describe('postPublicStatusUpdate', () => {
       affectedServiceIds: [svc!.id],
     });
     incidentId = inc.id;
+    incidentSlug = inc.publicSlug;
 
     await db
       .update(incidents)
@@ -134,5 +138,33 @@ describe('postPublicStatusUpdate', () => {
     await expect(
       postPublicStatusUpdate(getTestDb(), ic.id, incidentId, 'x'.repeat(5001)),
     ).rejects.toThrow();
+  });
+
+  test('public reader filters out events with postedToScope=team', async () => {
+    const db = getTestDb();
+    // Insert a synthetic 'team'-scoped event directly (bypassing the mutation).
+    await db.insert(timelineEvents).values({
+      incidentId,
+      authorUserId: ic.id,
+      kind: 'status_update_published',
+      body: {
+        kind: 'status_update_published',
+        message: 'Team-only message — must not leak to /status.',
+        postedToScope: 'team',
+      },
+    });
+    // Recompute snapshot to reflect the new row.
+    await recomputeAndPersistSnapshot(db, 'public');
+
+    const [pub] = await db.select().from(statusSnapshots).where(eq(statusSnapshots.scope, 'public'));
+    const payload = pub!.payload as {
+      activeIncidents: Array<{ latestPublicUpdate?: { body: string } }>;
+    };
+    // No public update should be recorded — the only event was scope=team.
+    expect(payload.activeIncidents[0]?.latestPublicUpdate).toBeUndefined();
+
+    // findPublicIncidentBySlug should also exclude the team-scoped event.
+    const detail = await findPublicIncidentBySlug(db, incidentSlug);
+    expect(detail?.publicUpdates ?? []).toHaveLength(0);
   });
 });

@@ -119,7 +119,8 @@ async function loadBuilderInputs(db: DB, now: Date): Promise<BuilderInputs> {
       .orderBy(desc(timelineEvents.occurredAt));
     for (const u of updates) {
       if (latestUpdates.has(u.incidentId)) continue;
-      const body = u.body as { message: string };
+      const body = u.body as { message: string; postedToScope: 'public' | 'team' };
+      if (body.postedToScope !== 'public') continue;
       latestUpdates.set(u.incidentId, {
         body: body.message,
         postedAt: u.occurredAt,
